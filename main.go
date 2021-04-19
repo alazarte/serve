@@ -20,6 +20,7 @@ var (
 	port         string
 	postURL      *url.URL
 	client       = http.Client{}
+	allowHost    = []string{"alazarte.com"}
 )
 
 func init() {
@@ -96,7 +97,8 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	f, err := os.ReadFile("html" + r.URL.Path)
 	if err != nil {
 		log.Println(err)
-		return
+		w.WriteHeader(http.StatusNotFound)
+		f = []byte(http.StatusText(http.StatusNotFound))
 	}
 	if _, err := w.Write(f); err != nil {
 		log.Println(err)
@@ -104,6 +106,22 @@ func handler(w http.ResponseWriter, r *http.Request) {
 }
 
 func redirect(w http.ResponseWriter, r *http.Request) {
+	log.Println("redirecting information:")
+	fmt.Printf("%#v\n", r)
+
+	found := false
+	for _, v := range allowHost {
+		if r.Host == v {
+			found = true
+			break
+		}
+	}
+	if !found {
+		log.Printf("%s not found in list of hosts: %v\n", r.Host, allowHost)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
 	target := "https://" + r.Host + r.URL.Path
 	// TODO handle query params?
 
