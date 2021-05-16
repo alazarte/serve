@@ -64,6 +64,13 @@ func init() {
 
 func handler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("%s %s %s", r.Method, r.URL, r.RemoteAddr)
+
+	if r.Method != http.MethodPost && r.Method != http.MethodGet {
+		log.Println("invalid method:", r.Method)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
 	if r.Method == http.MethodPost {
 		r2 := new(http.Request)
 		*r2 = *r
@@ -108,6 +115,12 @@ func handler(w http.ResponseWriter, r *http.Request) {
 func redirect(w http.ResponseWriter, r *http.Request) {
 	log.Println("redirecting information:")
 	fmt.Printf("%#v\n", r)
+
+	if r.Method != http.MethodPost && r.Method != http.MethodGet {
+		log.Println("invalid method:", r.Method)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
 
 	found := false
 	for _, v := range allowHost {
