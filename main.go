@@ -18,12 +18,15 @@ var (
 
 	postURL *url.URL
 
-	skFilepath   = flag.String("sk", "", "secret key filepath")
+	skFilepath   = flag.String("sk", "privkey.pem", "secret key filepath")
 	htmlFilepath = flag.String("html", "", "where html files are located")
-	pemFilepath  = flag.String("pem", "", "certificate filepath")
+	pemFilepath  = flag.String("pem", "fullcert.pem", "certificate filepath")
 	publicPath   = flag.String("public", "/tmp/public", "path to get public files")
 	port         = flag.String("port", "443", "port to listen for http connections")
-	urlString    = flag.String("post", "", "url to post to, to upload files")
+	postUrl      = flag.String("post", "", "to configure location for git.sr.ht/~alazarte/uploader")
+
+	infoFile = flag.String("info", "", "filepath to print info logs to, default is stdout")
+	errFile  = flag.String("err", "", "filepath to print error logs to, default is stderr")
 
 	client = http.Client{}
 )
@@ -41,8 +44,8 @@ func init() {
 		flag.PrintDefaults()
 		os.Exit(1)
 	}
-	if *urlString != "" {
-		u, err := url.Parse(*urlString)
+	if *postUrl != "" {
+		u, err := url.Parse(*postUrl)
 		if err != nil {
 			fmt.Println("error parsing url:", err)
 			os.Exit(1)
@@ -126,8 +129,31 @@ func redirect(w http.ResponseWriter, r *http.Request) {
 }
 
 func init() {
-	errLogger = log.New(os.Stderr, "[error] ", log.LstdFlags)
-	infoLogger = log.New(os.Stdout, "[info] ", log.LstdFlags)
+	var infout, errout io.Writer
+	if *infoFile != "" {
+		f, err := os.OpenFile(*infoFile, os.O_WRONLY, 0644)
+		// TODO create file if not exists?
+		if err != nil {
+			fmt.Println("couldn't open file for info logs:", *infoFile)
+			os.Exit(2)
+		}
+		infout = f
+	} else {
+		infout = os.Stdout
+	}
+	if *errFile != "" {
+		f, err := os.OpenFile(*errFile, os.O_WRONLY, 0644)
+		// TODO create file if not exists?
+		if err != nil {
+			fmt.Println("couldn't open file for err logs:", *errFile)
+			os.Exit(2)
+		}
+		errout = f
+	} else {
+		errout = os.Stderr
+	}
+	errLogger = log.New(errout, "[error] ", log.LstdFlags)
+	infoLogger = log.New(infout, "[info] ", log.LstdFlags)
 }
 
 func main() {
