@@ -111,7 +111,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 }
 
 func redirect(w http.ResponseWriter, r *http.Request) {
-	infoLogger.Printf("redirecting information: %#v\n", r)
+	infoLogger.Printf("redirecting information:", r.Method, r.URL, r.RequestURI)
 
 	if r.Method != http.MethodPost && r.Method != http.MethodGet {
 		errLogger.Println("invalid method:", r.Method)
@@ -141,6 +141,6 @@ func main() {
 		http.ServeFile(w, r, fmt.Sprintf("%s/%s", publicPath, file))
 	})
 
-	infoLogger.Printf("going to serve on port 443, public path is %s", publicPath)
+	infoLogger.Printf("going to serve on port 443, public path is %s", *publicPath)
 	errLogger.Fatal(http.ListenAndServeTLS(":443", *pemFilepath, *skFilepath, nil))
 }
