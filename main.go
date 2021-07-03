@@ -16,14 +16,13 @@ var (
 	errLogger  *log.Logger
 	infoLogger *log.Logger
 
-	postURL *url.URL
+	postUrl *url.URL
 
 	skFilepath   = flag.String("sk", "privkey.pem", "secret key filepath")
 	htmlFilepath = flag.String("html", "", "where html files are located")
 	pemFilepath  = flag.String("pem", "fullcert.pem", "certificate filepath")
 	publicPath   = flag.String("public", "/tmp/public", "path to get public files")
-	port         = flag.String("port", "443", "port to listen for http connections")
-	postUrl      = flag.String("post", "", "to configure location for git.sr.ht/~alazarte/uploader")
+	post         = flag.String("post", "", "to configure location for git.sr.ht/~alazarte/uploader")
 
 	infoFile = flag.String("info", "", "filepath to print info logs to, default is stdout")
 	errFile  = flag.String("err", "", "filepath to print error logs to, default is stderr")
@@ -44,13 +43,13 @@ func init() {
 		flag.PrintDefaults()
 		os.Exit(1)
 	}
-	if *postUrl != "" {
-		u, err := url.Parse(*postUrl)
+	if *post != "" {
+		u, err := url.Parse(*post)
 		if err != nil {
 			fmt.Println("error parsing url:", err)
 			os.Exit(1)
 		}
-		postURL = u
+		postUrl = u
 	}
 	if _, err := os.Stat(*publicPath); err != nil {
 		if err := os.Mkdir(*publicPath, 0755); err != nil {
@@ -60,7 +59,7 @@ func init() {
 }
 
 func handler(w http.ResponseWriter, r *http.Request) {
-	infoLogger.Printf("%s %s %s", r.Method, r.URL, r.RemoteAddr)
+	infoLogger.Printf("%s %s %s", r.Method, r.Host, r.RemoteAddr)
 
 	if r.Method != http.MethodPost && r.Method != http.MethodGet {
 		errLogger.Println("invalid method:", r.Method)
@@ -69,13 +68,13 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == http.MethodPost {
-		if postURL == nil {
+		if postUrl == nil {
 			errLogger.Println("missing url to post to...")
 			return
 		}
 		r2 := new(http.Request)
 		*r2 = *r
-		r2.URL = postURL
+		r2.URL = postUrl
 		r2.RequestURI = ""
 
 		res, err := client.Do(r2)
@@ -114,8 +113,6 @@ func handler(w http.ResponseWriter, r *http.Request) {
 }
 
 func redirect(w http.ResponseWriter, r *http.Request) {
-	infoLogger.Printf("redirecting information:", r.Method, r.URL, r.RequestURI)
-
 	if r.Method != http.MethodPost && r.Method != http.MethodGet {
 		errLogger.Println("invalid method:", r.Method)
 		w.WriteHeader(http.StatusBadRequest)
@@ -131,7 +128,7 @@ func redirect(w http.ResponseWriter, r *http.Request) {
 func init() {
 	var infout, errout io.Writer
 	if *infoFile != "" {
-		f, err := os.OpenFile(*infoFile, os.O_WRONLY, 0644)
+		f, err := os.OpenFile(*infoFile, os.O_WRONLY|os.O_APPEND, 0644)
 		// TODO create file if not exists?
 		if err != nil {
 			fmt.Println("couldn't open file for info logs:", *infoFile)
@@ -142,7 +139,7 @@ func init() {
 		infout = os.Stdout
 	}
 	if *errFile != "" {
-		f, err := os.OpenFile(*errFile, os.O_WRONLY, 0644)
+		f, err := os.OpenFile(*errFile, os.O_WRONLY|os.O_APPEND, 0644)
 		// TODO create file if not exists?
 		if err != nil {
 			fmt.Println("couldn't open file for err logs:", *errFile)
@@ -164,9 +161,11 @@ func main() {
 	http.HandleFunc("/public/", func(w http.ResponseWriter, r *http.Request) {
 		infoLogger.Printf("%s %s %s", r.Method, r.URL, r.RemoteAddr)
 		file := strings.TrimPrefix(r.URL.Path, "/public/")
-		http.ServeFile(w, r, fmt.Sprintf("%s/%s", publicPath, file))
+		http.ServeFile(w, r, fmt.Sprintf("%s/%s", *publicPath, file))
 	})
 
 	infoLogger.Printf("going to serve on port 443, public path is %s", *publicPath)
-	errLogger.Fatal(http.ListenAndServeTLS(":443", *pemFilepath, *skFilepath, nil))
+
+	server := &http.Server{Addr: ":443", Handler: nil, ErrorLog: errLogger}
+	errLogger.Fatal(server.ListenAndServeTLS(*pemFilepath, *skFilepath))
 }
