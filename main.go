@@ -60,74 +60,23 @@ func init() {
 	}
 }
 
-type handler struct{}
+type mux struct {
+	handlers map[string]func(w http.ResponseWriter, r *http.Request)
+}
 
-func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (h mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	dump, err := httputil.DumpRequest(r, true)
 	if err != nil {
 		errLogger.Println("httputil.DumpRequest() = err:", err)
 	}
 	debugLogger.Printf("redirect dump: %q", dump)
 
-	switch r.Host {
-	case "192.168.1.2":
-		fallthrough
-	case "alazarte.com":
-		if r.Method != http.MethodGet {
-			errLogger.Println("invalid method:", r.Method)
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-		if path.Ext(r.URL.Path) == ".css" {
-			w.Header().Set("content-type", "text/css; charset=utf-8")
-		}
-		if r.URL.Path == "/" {
-			r.URL.Path = "/index.html"
-		}
-		f, err := os.ReadFile(path.Join(*htmlFilepath, r.URL.Path))
-		if err != nil {
-			errLogger.Println(err)
-			w.WriteHeader(http.StatusNotFound)
-			f = []byte(http.StatusText(http.StatusNotFound))
-		}
-		if _, err := w.Write(f); err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			errLogger.Println(err)
-		}
-	case "public.alazarte.com":
-	case "api.alazarte.com":
-		if r.Method != http.MethodPost {
-			errLogger.Println("invalid method:", r.Method)
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-		if postUrl == nil {
-			errLogger.Println("missing url to post to...")
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		r2 := new(http.Request)
-		*r2 = *r
-		r2.URL = postUrl
-		r2.RequestURI = ""
-		res, err := client.Do(r2)
-		if err != nil {
-			errLogger.Println(err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		b, err := io.ReadAll(res.Body)
-		if err != nil {
-			errLogger.Println("error reading response from API", err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		w.WriteHeader(res.StatusCode)
-		if _, err := w.Write(b); err != nil {
-			errLogger.Println(err)
-		}
+	if _, ok := h.handlers[r.Host]; !ok {
+		errLogger.Println("handler not implemented for:", r.Host)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	h.handlers[r.Host](w, r)
 }
 
 func redirect(w http.ResponseWriter, r *http.Request) {
@@ -137,8 +86,8 @@ func redirect(w http.ResponseWriter, r *http.Request) {
 	}
 	debugLogger.Printf("redirect dump: %q", dump)
 
-	target := "https://" + r.Host + r.URL.Path
-	infoLogger.Printf("redirecting to %s", target)
+	target := fmt.Sprintf("https://%s%s", r.Host, r.URL.Path)
+	infoLogger.Println("redirecting to:", target)
 	http.Redirect(w, r, target, http.StatusTemporaryRedirect)
 }
 
@@ -183,14 +132,81 @@ func init() {
 }
 
 func main() {
-	go http.ListenAndServe(":80", http.HandlerFunc(redirect))
-	go http.ListenAndServe(":8000", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		infoLogger.Printf("%s %s %s", r.Method, r.URL, r.RemoteAddr)
-		http.ServeFile(w, r, fmt.Sprintf("%s/%s", *publicPath, r.URL.Path))
-	}))
+	cerr := make(chan error)
+	go func() {
+		cerr <- http.ListenAndServe(":80", http.HandlerFunc(redirect))
+	}()
 
-	h := handler{}
-	server := &http.Server{Addr: ":443", Handler: h, ErrorLog: errLogger}
+	m := mux{
+		handlers: make(map[string]func(w http.ResponseWriter, r *http.Request)),
+	}
+	m.handlers["alazarte.com"] = func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			errLogger.Println("invalid method:", r.Method)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		if path.Ext(r.URL.Path) == ".css" {
+			w.Header().Set("content-type", "text/css; charset=utf-8")
+		}
+		if r.URL.Path == "/" {
+			r.URL.Path = "/index.html"
+		}
+		f, err := os.ReadFile(path.Join(*htmlFilepath, r.URL.Path))
+		if err != nil {
+			errLogger.Println(err)
+			w.WriteHeader(http.StatusNotFound)
+			f = []byte(http.StatusText(http.StatusNotFound))
+		}
+		if _, err := w.Write(f); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			errLogger.Println(err)
+		}
+	}
+	m.handlers["192.168.1.2"] = m.handlers["alazarte.com"]
+	m.handlers["public.alazarte.com"] = func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, fmt.Sprintf("%s%s", *publicPath, r.URL.Path))
+	}
+	m.handlers["api.alazarte.com"] = func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			errLogger.Println("invalid method:", r.Method)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		if postUrl == nil {
+			errLogger.Println("missing url to post to...")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		r2 := new(http.Request)
+		*r2 = *r
+		r2.URL = postUrl
+		r2.RequestURI = ""
+		res, err := client.Do(r2)
+		if err != nil {
+			errLogger.Println(err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		b, err := io.ReadAll(res.Body)
+		if err != nil {
+			errLogger.Println("error reading response from API", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(res.StatusCode)
+		if _, err := w.Write(b); err != nil {
+			errLogger.Println(err)
+		}
+		return
+	}
 
-	errLogger.Fatal(server.ListenAndServeTLS(*pemFilepath, *skFilepath))
+	server := &http.Server{Addr: ":443", Handler: m, ErrorLog: errLogger}
+
+	go func() {
+		cerr <- server.ListenAndServeTLS(*pemFilepath, *skFilepath)
+	}()
+	for {
+		errLogger.Println(<-cerr)
+	}
 }
