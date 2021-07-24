@@ -141,16 +141,13 @@ func main() {
 		handlers: make(map[string]func(w http.ResponseWriter, r *http.Request)),
 	}
 	r := routes.Routes{
-		ErrLogger:    errLogger,
-		DebugLogger:  debugLogger,
-		PostUrl:      postUrl,
-		PublicPath:   *publicPath,
-		HtmlFilepath: *htmlFilepath,
+		ErrLogger:   errLogger,
+		DebugLogger: debugLogger,
 	}
-	m.handlers["alazarte.com"] = r.Index
-	m.handlers["192.168.1.2"] = r.Index
-	m.handlers["public.alazarte.com"] = r.PublicFiles
-	m.handlers["api.alazarte.com"] = r.Api
+	m.handlers["alazarte.com"] = r.HandleRoot(*htmlFilepath)
+	m.handlers["192.168.1.2"] = r.HandleRoot(*htmlFilepath)
+	m.handlers["public.alazarte.com"] = r.HandlePublicFiles(*publicPath)
+	m.handlers["api.alazarte.com"] = r.HandleApi(postUrl)
 
 	server := &http.Server{Addr: ":443", Handler: m, ErrorLog: errLogger}
 
