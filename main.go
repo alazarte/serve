@@ -25,11 +25,7 @@ var (
 	publicPath   = flag.String("public", "/tmp/public", "path to get public files")
 	post         = flag.String("post", "", "to configure location for git.sr.ht/~alazarte/uploader")
 
-	infoFile  = flag.String("info", "", "filepath to print info logs to, default is stdout")
-	errFile   = flag.String("err", "", "filepath to print error logs to, default is stderr")
 	debugFile = flag.String("debug", "", "filepath to print debug logs to, default is io.Discard")
-
-	client = http.Client{}
 )
 
 func init() {
@@ -72,8 +68,7 @@ func (h mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	debugLogger.Printf("redirect dump: %q", dump)
 
 	if _, ok := h.handlers[r.Host]; !ok {
-		errLogger.Println("handler not implemented for:", r.Host)
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 	h.handlers[r.Host](w, r)
@@ -92,29 +87,8 @@ func redirect(w http.ResponseWriter, r *http.Request) {
 }
 
 func init() {
-	var infout, errout, debugout io.Writer
-	if *infoFile != "" {
-		f, err := os.OpenFile(*infoFile, os.O_WRONLY|os.O_APPEND, 0644)
-		// TODO create file if not exists?
-		if err != nil {
-			fmt.Println("couldn't open file for info logs:", *infoFile)
-			os.Exit(2)
-		}
-		infout = f
-	} else {
-		infout = os.Stdout
-	}
-	if *errFile != "" {
-		f, err := os.OpenFile(*errFile, os.O_WRONLY|os.O_APPEND, 0644)
-		// TODO create file if not exists?
-		if err != nil {
-			fmt.Println("couldn't open file for err logs:", *errFile)
-			os.Exit(2)
-		}
-		errout = f
-	} else {
-		errout = os.Stderr
-	}
+	var debugout io.Writer
+	debugout = io.Discard
 	if *debugFile != "" {
 		f, err := os.OpenFile(*debugFile, os.O_WRONLY|os.O_APPEND, 0644)
 		// TODO create file if not exists?
@@ -123,11 +97,9 @@ func init() {
 			os.Exit(2)
 		}
 		debugout = f
-	} else {
-		debugout = io.Discard
 	}
-	errLogger = log.New(errout, "[error] ", log.LstdFlags)
-	infoLogger = log.New(infout, "[info] ", log.LstdFlags)
+	errLogger = log.New(os.Stderr, "[error] ", log.LstdFlags)
+	infoLogger = log.New(os.Stdout, "[info] ", log.LstdFlags)
 	debugLogger = log.New(debugout, "[debug] ", log.LstdFlags)
 }
 
