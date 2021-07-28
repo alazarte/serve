@@ -72,23 +72,26 @@ func (ro Routes) HandleRoot(root string) func(http.ResponseWriter, *http.Request
 		if r.URL.Path == "/" {
 			r.URL.Path = "/index.html"
 		}
+		var out []byte
 		switch path.Ext(r.URL.Path) {
 		case ".css":
 			w.Header().Set("content-type", "text/css; charset=utf-8")
+			fallthrough
 		case ".html":
-			// what do I do here?
+			f, err := os.ReadFile(path.Join(root, r.URL.Path))
+			if err != nil {
+				ro.ErrLogger.Println(err)
+				w.WriteHeader(http.StatusNotFound)
+				out = []byte(http.StatusText(http.StatusNotFound))
+			} else {
+				out = f
+			}
 		default:
 			w.WriteHeader(http.StatusBadRequest)
-			return
+			out = []byte(http.StatusText(http.StatusBadRequest))
 		}
 
-		f, err := os.ReadFile(path.Join(root, r.URL.Path))
-		if err != nil {
-			ro.ErrLogger.Println(err)
-			w.WriteHeader(http.StatusNotFound)
-			f = []byte(http.StatusText(http.StatusNotFound))
-		}
-		if _, err := w.Write(f); err != nil {
+		if _, err := w.Write(out); err != nil {
 			ro.ErrLogger.Println(err)
 			w.WriteHeader(http.StatusInternalServerError)
 		}
