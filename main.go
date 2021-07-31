@@ -113,6 +113,7 @@ func main() {
 		handlers: make(map[string]func(w http.ResponseWriter, r *http.Request)),
 	}
 	r := routes.Routes{
+		InfoLogger:  infoLogger,
 		ErrLogger:   errLogger,
 		DebugLogger: debugLogger,
 	}

@@ -15,6 +15,7 @@ type logger interface {
 }
 
 type Routes struct {
+	InfoLogger  logger
 	ErrLogger   logger
 	DebugLogger logger
 }
@@ -69,6 +70,7 @@ func (ro Routes) HandleRoot(root string) func(http.ResponseWriter, *http.Request
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
+		ro.InfoLogger.Printf("request to path: %s, %s", r.Host, r.URL.Path)
 		if r.URL.Path == "/" {
 			r.URL.Path = "/index.html"
 		}
