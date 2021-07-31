@@ -119,6 +119,7 @@ func main() {
 	m.handlers["alazarte.com"] = r.HandleRoot(*htmlFilepath)
 	m.handlers["192.168.1.2"] = r.HandleRoot(*htmlFilepath)
 	m.handlers["public.alazarte.com"] = r.HandlePublicFiles(*publicPath)
+	m.handlers["www.alazarte.com"] = r.HandleRoot(*htmlFilepath)
 	m.handlers["api.alazarte.com"] = r.HandleApi(postUrl)
 
 	server := &http.Server{Addr: ":443", Handler: m, ErrorLog: errLogger}
