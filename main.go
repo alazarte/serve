@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -12,6 +13,15 @@ import (
 	"serve/internal/routes"
 )
 
+type Config struct {
+	Pem    string `json:"pem"`
+	Sk     string `json:"sk"`
+	Html   string `json:"html"`
+	Debug  string `json:"debug"`
+	Post   string `json:"post"`
+	Public string `json:"public"`
+}
+
 var (
 	errLogger   *log.Logger
 	infoLogger  *log.Logger
@@ -19,39 +29,41 @@ var (
 
 	postUrl *url.URL
 
-	skFilepath   = flag.String("sk", "privkey.pem", "secret key filepath")
-	htmlFilepath = flag.String("html", "", "where html files are located")
-	pemFilepath  = flag.String("pem", "fullcert.pem", "certificate filepath")
-	publicPath   = flag.String("public", "/tmp/public", "path to get public files")
-	post         = flag.String("post", "", "to configure location for git.sr.ht/~alazarte/uploader")
+	config Config
 
-	debugFile = flag.String("debug", "", "filepath to print debug logs to, default is io.Discard")
+	debugFile      = flag.String("debug", "", "filepath to print debug logs to, default is io.Discard")
+	configFilepath = flag.String("config", "/etc/serve.json", "config filepath")
 )
 
 func init() {
 	flag.Parse()
 
-	if *skFilepath == "" || *pemFilepath == "" {
-		fmt.Println("missing either pem or sk filepath")
-		flag.PrintDefaults()
-		os.Exit(1)
+	if _, err := os.Stat(*configFilepath); err != nil {
+		panic(err)
 	}
-	if *htmlFilepath == "" {
-		fmt.Println("html source path is missing")
-		flag.PrintDefaults()
-		os.Exit(1)
+	f, err := os.ReadFile(*configFilepath)
+	if err != nil {
+		panic(err)
 	}
-	if *post != "" {
-		u, err := url.Parse(*post)
+	if err := json.Unmarshal(f, &config); err != nil {
+		panic(err)
+	}
+	if config.Sk == "" || config.Pem == "" {
+		panic("missing either pem or sk filepath")
+	}
+	if config.Html == "" {
+		panic("html source path is missing")
+	}
+	if config.Post != "" {
+		u, err := url.Parse(config.Post)
 		if err != nil {
-			fmt.Println("error parsing url:", err)
-			os.Exit(1)
+			panic(fmt.Sprintf("error parsing url: %s", err))
 		}
 		postUrl = u
 	}
-	if _, err := os.Stat(*publicPath); err != nil {
-		if err := os.Mkdir(*publicPath, 0755); err != nil {
-			fmt.Println(err)
+	if _, err := os.Stat(config.Html); err != nil {
+		if err := os.Mkdir(config.Html, 0755); err != nil {
+			panic(err)
 		}
 	}
 }
@@ -89,12 +101,11 @@ func redirect(w http.ResponseWriter, r *http.Request) {
 func init() {
 	var debugout io.Writer
 	debugout = io.Discard
-	if *debugFile != "" {
-		f, err := os.OpenFile(*debugFile, os.O_WRONLY|os.O_APPEND, 0644)
+	if config.Debug != "" {
+		f, err := os.OpenFile(config.Debug, os.O_WRONLY|os.O_APPEND, 0644)
 		// TODO create file if not exists?
 		if err != nil {
-			fmt.Println("couldn't open file for debug logs:", *debugFile)
-			os.Exit(2)
+			panic(fmt.Sprintln("couldn't open file for debug logs:", config.Debug))
 		}
 		debugout = f
 	}
@@ -117,16 +128,16 @@ func main() {
 		ErrLogger:   errLogger,
 		DebugLogger: debugLogger,
 	}
-	m.handlers["alazarte.com"] = r.HandleRoot(*htmlFilepath)
-	m.handlers["192.168.1.2"] = r.HandleRoot(*htmlFilepath)
-	m.handlers["public.alazarte.com"] = r.HandlePublicFiles(*publicPath)
-	m.handlers["www.alazarte.com"] = r.HandleRoot(*htmlFilepath)
+	m.handlers["alazarte.com"] = r.HandleRoot(config.Html)
+	m.handlers["192.168.1.2"] = r.HandleRoot(config.Html)
+	m.handlers["www.alazarte.com"] = r.HandleRoot(config.Html)
+	m.handlers["public.alazarte.com"] = r.HandlePublicFiles(config.Public)
 	m.handlers["api.alazarte.com"] = r.HandleApi(postUrl)
 
 	server := &http.Server{Addr: ":443", Handler: m, ErrorLog: errLogger}
 
 	go func() {
-		cerr <- server.ListenAndServeTLS(*pemFilepath, *skFilepath)
+		cerr <- server.ListenAndServeTLS(config.Pem, config.Sk)
 	}()
 	for {
 		errLogger.Println(<-cerr)
