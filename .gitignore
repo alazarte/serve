@@ -1,5 +1,6 @@
 *
 !*.go
+!serve.json
 !go.mod
 !.gitignore
 !*/
