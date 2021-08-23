@@ -124,9 +124,11 @@ func main() {
 		ErrLogger:   errLogger,
 		DebugLogger: debugLogger,
 	}
-	m.handlers["alazarte.com"] = r.HandleRoot(config.Html)
-	m.handlers["192.168.1.2"] = r.HandleRoot(config.Html)
-	m.handlers["www.alazarte.com"] = r.HandleRoot(config.Html)
+	rootCustomPaths := map[string]func(w http.ResponseWriter, r *http.Request){
+		"/upload": r.HandleApi(postUrl),
+	}
+	m.handlers["alazarte.com"] = r.HandleRoot(config.Html, rootCustomPaths)
+	m.handlers["www.alazarte.com"] = r.HandleRoot(config.Html, rootCustomPaths)
 	m.handlers["public.alazarte.com"] = r.HandlePublicFiles(config.Public)
 	m.handlers["api.alazarte.com"] = r.HandleApi(postUrl)
 

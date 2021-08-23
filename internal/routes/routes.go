@@ -59,18 +59,24 @@ func (ro Routes) HandleApi(url *url.URL) func(w http.ResponseWriter, r *http.Req
 
 func (ro Routes) HandlePublicFiles(path string) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
+		ro.InfoLogger.Printf("serving file: %s%s", path, r.URL.Path)
 		http.ServeFile(w, r, fmt.Sprintf("%s%s", path, r.URL.Path))
 	}
 }
 
-func (ro Routes) HandleRoot(root string) func(http.ResponseWriter, *http.Request) {
+func (ro Routes) HandleRoot(root string, customPaths map[string]func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
+		ro.InfoLogger.Printf("request: %s, %s, %s", r.Method, r.Host, r.URL.Path)
+		if h, ok := customPaths[r.URL.Path]; ok {
+			ro.InfoLogger.Println("handling custom path")
+			h(w, r)
+			return
+		}
 		if r.Method != http.MethodGet {
 			ro.ErrLogger.Println("invalid method:", r.Method)
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		ro.InfoLogger.Printf("request to path: %s, %s", r.Host, r.URL.Path)
 		if r.URL.Path == "/" {
 			r.URL.Path = "/index.html"
 		}
