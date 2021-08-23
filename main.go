@@ -62,10 +62,22 @@ func init() {
 		postUrl = u
 	}
 	if _, err := os.Stat(config.Html); err != nil {
-		if err := os.Mkdir(config.Html, 0755); err != nil {
-			panic(err)
-		}
+		panic(err)
 	}
+	var debugout io.Writer
+	switch config.Debug {
+	case "":
+		debugout = io.Discard
+	default:
+		f, err := os.OpenFile(config.Debug, os.O_WRONLY|os.O_APPEND, 0644)
+		if err != nil {
+			panic(fmt.Sprintln("couldn't open file for debug logs:", config.Debug))
+		}
+		debugout = f
+	}
+	errLogger = log.New(os.Stderr, "[error] ", log.LstdFlags)
+	infoLogger = log.New(os.Stdout, "[info] ", log.LstdFlags)
+	debugLogger = log.New(debugout, "[debug] ", log.LstdFlags)
 }
 
 type mux struct {
@@ -96,22 +108,6 @@ func redirect(w http.ResponseWriter, r *http.Request) {
 	target := fmt.Sprintf("https://%s%s", r.Host, r.URL.Path)
 	infoLogger.Println("redirecting to:", target)
 	http.Redirect(w, r, target, http.StatusTemporaryRedirect)
-}
-
-func init() {
-	var debugout io.Writer
-	debugout = io.Discard
-	if config.Debug != "" {
-		f, err := os.OpenFile(config.Debug, os.O_WRONLY|os.O_APPEND, 0644)
-		// TODO create file if not exists?
-		if err != nil {
-			panic(fmt.Sprintln("couldn't open file for debug logs:", config.Debug))
-		}
-		debugout = f
-	}
-	errLogger = log.New(os.Stderr, "[error] ", log.LstdFlags)
-	infoLogger = log.New(os.Stdout, "[info] ", log.LstdFlags)
-	debugLogger = log.New(debugout, "[debug] ", log.LstdFlags)
 }
 
 func main() {
