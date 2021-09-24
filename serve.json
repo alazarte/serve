@@ -1,7 +1,29 @@
 {
-  "pem": "",
-  "sk": "",
-  "html": "",
-  "debug": "",
-  "public": ""
+  "pem": "fullchainfile.pem",
+  "sk": "privkeyfile.pem",
+  "handlers": [
+    {
+      "name": "host.com",
+      "path": "/path/to/html",
+      "type": "root",
+      "headers": [
+        {
+          "name": "",
+          "value": ""
+        }
+      ],
+      "subPaths": [
+        {
+          "name": "/upload",
+          "value": "http://targethost.com"
+        }
+      ]
+    },
+    {
+      "name": "sub.host.com",
+      "path": "/path/to/public",
+      "type": "public"
+    }
+  ],
+  "debug": "/var/log/serve/debug"
 }

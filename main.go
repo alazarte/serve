@@ -14,13 +14,29 @@ import (
 )
 
 type Config struct {
-	Pem    string `json:"pem"`
-	Sk     string `json:"sk"`
-	Html   string `json:"html"`
-	Debug  string `json:"debug"`
-	Post   string `json:"post"`
-	Public string `json:"public"`
+	Pem      string    `json:"pem"`
+	Sk       string    `json:"sk"`
+	Debug    string    `json:"debug"`
+	Handlers []Handler `json:"handlers"`
 }
+
+type KeyVal struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}
+
+type Handler struct {
+	Name     string   `json:"name"`
+	Type     string   `json:"type"`
+	Path     string   `json:"path"`
+	SubPaths []KeyVal `json:"subPaths"`
+	Headers  []KeyVal `json:"headers"`
+}
+
+var (
+	TypeRoot   = "root"
+	TypePublic = "public"
+)
 
 var (
 	errLogger   *log.Logger
@@ -51,9 +67,6 @@ func init() {
 	if config.Sk == "" || config.Pem == "" {
 		panic("missing either pem or sk filepath")
 	}
-	if config.Html == "" {
-		panic("html source path is missing")
-	}
 	if config.Post != "" {
 		u, err := url.Parse(config.Post)
 		if err != nil {
@@ -61,8 +74,8 @@ func init() {
 		}
 		postUrl = u
 	}
-	if _, err := os.Stat(config.Html); err != nil {
-		panic(err)
+	if len(config.Handlers) == 0 {
+		panic("no handlers defined")
 	}
 	var debugout io.Writer
 	switch config.Debug {
@@ -111,11 +124,6 @@ func redirect(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	cerr := make(chan error)
-	go func() {
-		cerr <- http.ListenAndServe(":80", http.HandlerFunc(redirect))
-	}()
-
 	m := mux{
 		handlers: make(map[string]func(w http.ResponseWriter, r *http.Request)),
 	}
@@ -124,15 +132,32 @@ func main() {
 		ErrLogger:   errLogger,
 		DebugLogger: debugLogger,
 	}
-	rootCustomPaths := map[string]func(w http.ResponseWriter, r *http.Request){
-		"/upload": r.HandleApi(postUrl),
+
+	for _, h := range config.Handlers {
+		switch h.Type {
+		case TypeRoot:
+			customPaths := make(map[string]func(w http.ResponseWriter, r *http.Request))
+			extraHeaders := make(map[string]string)
+			for _, p := range h.SubPaths {
+				customPaths[p.Name] = r.HandleApi(p.Value)
+			}
+			for _, h := range h.Headers {
+				extraHeaders[h.Name] = h.Value
+			}
+			m.handlers[h.Name] = r.HandleRoot(h.Path, extraHeaders, customPaths)
+		case TypePublic:
+			m.handlers[h.Name] = r.HandlePublicFiles(h.Path)
+		default:
+			errLogger.Println("handler type not recognized: %s", h.Type)
+		}
 	}
-	m.handlers["alazarte.com"] = r.HandleRoot(config.Html, rootCustomPaths)
-	m.handlers["www.alazarte.com"] = r.HandleRoot(config.Html, rootCustomPaths)
-	m.handlers["public.alazarte.com"] = r.HandlePublicFiles(config.Public)
-	m.handlers["api.alazarte.com"] = r.HandleApi(postUrl)
 
 	server := &http.Server{Addr: ":443", Handler: m, ErrorLog: errLogger}
+
+	cerr := make(chan error)
+	go func() {
+		cerr <- http.ListenAndServe(":80", http.HandlerFunc(redirect))
+	}()
 
 	go func() {
 		cerr <- server.ListenAndServeTLS(config.Pem, config.Sk)

@@ -20,15 +20,16 @@ type Routes struct {
 	DebugLogger logger
 }
 
-func (ro Routes) HandleApi(url *url.URL) func(w http.ResponseWriter, r *http.Request) {
+func (ro Routes) HandleApi(surl string) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			ro.ErrLogger.Println("invalid method:", r.Method)
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		if url == nil {
-			ro.ErrLogger.Println("missing url to post to...")
+		url, err := url.Parse(surl)
+		if err != nil {
+			ro.ErrLogger.Println(fmt.Sprintf("failed to parse target as url: %s", url))
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -64,7 +65,7 @@ func (ro Routes) HandlePublicFiles(path string) func(w http.ResponseWriter, r *h
 	}
 }
 
-func (ro Routes) HandleRoot(root string, customPaths map[string]func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
+func (ro Routes) HandleRoot(root string, extraHeaders map[string]string, customPaths map[string]func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ro.InfoLogger.Printf("request: %s, %s, %s", r.Method, r.Host, r.URL.Path)
 		if h, ok := customPaths[r.URL.Path]; ok {
@@ -98,7 +99,9 @@ func (ro Routes) HandleRoot(root string, customPaths map[string]func(http.Respon
 			w.WriteHeader(http.StatusBadRequest)
 			out = []byte(http.StatusText(http.StatusBadRequest))
 		}
-
+		for k, v := range extraHeaders {
+			w.Header().Set(k, v)
+		}
 		if _, err := w.Write(out); err != nil {
 			ro.ErrLogger.Println(err)
 			w.WriteHeader(http.StatusInternalServerError)
