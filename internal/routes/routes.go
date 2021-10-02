@@ -24,6 +24,9 @@ func (ro Routes) HandleApi(surl string) func(w http.ResponseWriter, r *http.Requ
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
+		// TODO to accept multiple clients, should compare to
+		// previously known hosts and return the origin
+		w.Header().Set("Access-Control-Allow-Origin", "https://alazarte.com")
 		url, err := url.Parse(surl)
 		if err != nil {
 			ro.Logger.Errf("failed to parse target as url: %s", url)
