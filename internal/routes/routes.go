@@ -9,27 +9,24 @@ import (
 	"path"
 )
 
-type logger interface {
-	Println(...interface{})
-	Printf(string, ...interface{})
-}
-
 type Routes struct {
-	InfoLogger  logger
-	ErrLogger   logger
-	DebugLogger logger
+	Logger interface {
+		Infof(string, ...interface{})
+		Errf(string, ...interface{})
+		Debugf(string, ...interface{})
+	}
 }
 
 func (ro Routes) HandleApi(surl string) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
-			ro.ErrLogger.Println("invalid method:", r.Method)
+			ro.Logger.Errf("invalid method: %s", r.Method)
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 		url, err := url.Parse(surl)
 		if err != nil {
-			ro.ErrLogger.Println(fmt.Sprintf("failed to parse target as url: %s", url))
+			ro.Logger.Errf("failed to parse target as url: %s", url)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -40,19 +37,19 @@ func (ro Routes) HandleApi(surl string) func(w http.ResponseWriter, r *http.Requ
 		r2.RequestURI = ""
 		res, err := client.Do(r2)
 		if err != nil {
-			ro.ErrLogger.Println(err)
+			ro.Logger.Errf("%s", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 		b, err := io.ReadAll(res.Body)
 		if err != nil {
-			ro.ErrLogger.Println("error reading response from API", err)
+			ro.Logger.Errf("error reading response from API: %s", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 		w.WriteHeader(res.StatusCode)
 		if _, err := w.Write(b); err != nil {
-			ro.ErrLogger.Println(err)
+			ro.Logger.Errf("%s", err)
 		}
 		return
 	}
@@ -60,21 +57,21 @@ func (ro Routes) HandleApi(surl string) func(w http.ResponseWriter, r *http.Requ
 
 func (ro Routes) HandlePublicFiles(path string) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		ro.InfoLogger.Printf("serving file: %s%s", path, r.URL.Path)
+		ro.Logger.Infof("serving file: %s%s", path, r.URL.Path)
 		http.ServeFile(w, r, fmt.Sprintf("%s%s", path, r.URL.Path))
 	}
 }
 
 func (ro Routes) HandleRoot(root string, extraHeaders map[string]string, customPaths map[string]func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		ro.InfoLogger.Printf("request: %s, %s, %s", r.Method, r.Host, r.URL.Path)
+		ro.Logger.Infof("request: %s, %s, %s", r.Method, r.Host, r.URL.Path)
 		if h, ok := customPaths[r.URL.Path]; ok {
-			ro.InfoLogger.Println("handling custom path")
+			ro.Logger.Infof("handling custom path")
 			h(w, r)
 			return
 		}
 		if r.Method != http.MethodGet {
-			ro.ErrLogger.Println("invalid method:", r.Method)
+			ro.Logger.Errf("invalid method:", r.Method)
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
@@ -89,7 +86,7 @@ func (ro Routes) HandleRoot(root string, extraHeaders map[string]string, customP
 		case ".html":
 			f, err := os.ReadFile(path.Join(root, r.URL.Path))
 			if err != nil {
-				ro.ErrLogger.Println(err)
+				ro.Logger.Errf("%s", err)
 				w.WriteHeader(http.StatusNotFound)
 				out = []byte(http.StatusText(http.StatusNotFound))
 			} else {
@@ -103,7 +100,7 @@ func (ro Routes) HandleRoot(root string, extraHeaders map[string]string, customP
 			w.Header().Set(k, v)
 		}
 		if _, err := w.Write(out); err != nil {
-			ro.ErrLogger.Println(err)
+			ro.Logger.Errf("%s", err)
 			w.WriteHeader(http.StatusInternalServerError)
 		}
 	}

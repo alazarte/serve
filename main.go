@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"serve/internal/routes"
+	"serve/internal/utils"
 )
 
 type Config struct {
@@ -34,14 +35,7 @@ type Handler struct {
 }
 
 var (
-	TypeRoot   = "root"
-	TypePublic = "public"
-)
-
-var (
-	errLogger   *log.Logger
-	infoLogger  *log.Logger
-	debugLogger *log.Logger
+	logger utils.Logger
 
 	postUrl *url.URL
 
@@ -49,6 +43,9 @@ var (
 
 	debugFile      = flag.String("debug", "", "filepath to print debug logs to, default is io.Discard")
 	configFilepath = flag.String("config", "/etc/serve.json", "config filepath")
+
+	TypeRoot   = "root"
+	TypePublic = "public"
 )
 
 func init() {
@@ -67,13 +64,6 @@ func init() {
 	if config.Sk == "" || config.Pem == "" {
 		panic("missing either pem or sk filepath")
 	}
-	if config.Post != "" {
-		u, err := url.Parse(config.Post)
-		if err != nil {
-			panic(fmt.Sprintf("error parsing url: %s", err))
-		}
-		postUrl = u
-	}
 	if len(config.Handlers) == 0 {
 		panic("no handlers defined")
 	}
@@ -88,9 +78,19 @@ func init() {
 		}
 		debugout = f
 	}
-	errLogger = log.New(os.Stderr, "[error] ", log.LstdFlags)
-	infoLogger = log.New(os.Stdout, "[info] ", log.LstdFlags)
-	debugLogger = log.New(debugout, "[debug] ", log.LstdFlags)
+	errLogger := log.New(os.Stderr, "[error] ", log.LstdFlags)
+	infoLogger := log.New(os.Stdout, "[info] ", log.LstdFlags)
+	debugLogger := log.New(debugout, "[debug] ", log.LstdFlags)
+	logger = func(t utils.LogType, s string, a ...interface{}) {
+		switch t {
+		case utils.Info:
+			infoLogger.Printf(s, a...)
+		case utils.Error:
+			errLogger.Printf(s, a...)
+		default:
+			debugLogger.Printf(s, a...)
+		}
+	}
 }
 
 type mux struct {
@@ -100,9 +100,9 @@ type mux struct {
 func (h mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	dump, err := httputil.DumpRequest(r, true)
 	if err != nil {
-		errLogger.Println("httputil.DumpRequest() = err:", err)
+		logger.Errf("httputil.DumpRequest() = err: %q", err)
 	}
-	debugLogger.Printf("redirect dump: %q", dump)
+	logger.Debugf("redirect dump: %q", dump)
 
 	if _, ok := h.handlers[r.Host]; !ok {
 		w.WriteHeader(http.StatusBadRequest)
@@ -114,12 +114,12 @@ func (h mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func redirect(w http.ResponseWriter, r *http.Request) {
 	dump, err := httputil.DumpRequest(r, true)
 	if err != nil {
-		errLogger.Println("httputil.DumpRequest() = err:", err)
+		logger.Errf("httputil.DumpRequest() = err: %q", err)
 	}
-	debugLogger.Printf("redirect dump: %q", dump)
+	logger.Debugf("redirect dump: %q", dump)
 
 	target := fmt.Sprintf("https://%s%s", r.Host, r.URL.Path)
-	infoLogger.Println("redirecting to:", target)
+	logger.Infof("redirecting to: %s", target)
 	http.Redirect(w, r, target, http.StatusTemporaryRedirect)
 }
 
@@ -128,9 +128,7 @@ func main() {
 		handlers: make(map[string]func(w http.ResponseWriter, r *http.Request)),
 	}
 	r := routes.Routes{
-		InfoLogger:  infoLogger,
-		ErrLogger:   errLogger,
-		DebugLogger: debugLogger,
+		Logger: logger,
 	}
 
 	for _, h := range config.Handlers {
@@ -148,11 +146,11 @@ func main() {
 		case TypePublic:
 			m.handlers[h.Name] = r.HandlePublicFiles(h.Path)
 		default:
-			errLogger.Println("handler type not recognized: %s", h.Type)
+			logger.Errf("handler type not recognized: %s", h.Type)
 		}
 	}
 
-	server := &http.Server{Addr: ":443", Handler: m, ErrorLog: errLogger}
+	server := &http.Server{Addr: ":443", Handler: m, ErrorLog: log.New(os.Stderr, "[server error] ", log.LstdFlags)}
 
 	cerr := make(chan error)
 	go func() {
@@ -163,6 +161,6 @@ func main() {
 		cerr <- server.ListenAndServeTLS(config.Pem, config.Sk)
 	}()
 	for {
-		errLogger.Println(<-cerr)
+		logger.Errf(fmt.Sprintln(<-cerr))
 	}
 }
