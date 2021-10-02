@@ -46,6 +46,7 @@ var (
 
 	TypeRoot   = "root"
 	TypePublic = "public"
+	TypeApi    = "api"
 )
 
 func init() {
@@ -140,17 +141,23 @@ func main() {
 				customPaths[p.Name] = r.HandleApi(p.Value)
 			}
 			for _, h := range h.Headers {
-				extraHeaders[h.Name] = h.Value
+				extraHeaders[http.CanonicalHeaderKey(h.Name)] = h.Value
 			}
 			m.handlers[h.Name] = r.HandleRoot(h.Path, extraHeaders, customPaths)
 		case TypePublic:
 			m.handlers[h.Name] = r.HandlePublicFiles(h.Path)
+		case TypeApi:
+			m.handlers[h.Name] = r.HandleApi(h.Path)
 		default:
 			logger.Errf("handler type not recognized: %s", h.Type)
 		}
 	}
 
-	server := &http.Server{Addr: ":443", Handler: m, ErrorLog: log.New(os.Stderr, "[server error] ", log.LstdFlags)}
+	server := &http.Server{
+		Addr:     ":443",
+		Handler:  m,
+		ErrorLog: log.New(os.Stderr, "[server error] ", log.LstdFlags),
+	}
 
 	cerr := make(chan error)
 	go func() {
