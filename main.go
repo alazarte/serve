@@ -41,8 +41,9 @@ var (
 
 	config Config
 
-	debugFile      = flag.String("debug", "", "filepath to print debug logs to, default is io.Discard")
-	configFilepath = flag.String("config", "/etc/serve.json", "config filepath")
+	debugFile       = flag.String("debug", "", "filepath to print debug logs to, default is io.Discard")
+	configFilepath  = flag.String("config", "/etc/serve.json", "config filepath")
+	verboseRequests = flag.Bool("verboseRequest", false, "dump requests to debug log")
 
 	TypeRoot   = "root"
 	TypePublic = "public"
@@ -52,22 +53,6 @@ var (
 func init() {
 	flag.Parse()
 
-	if _, err := os.Stat(*configFilepath); err != nil {
-		panic(err)
-	}
-	f, err := os.ReadFile(*configFilepath)
-	if err != nil {
-		panic(err)
-	}
-	if err := json.Unmarshal(f, &config); err != nil {
-		panic(err)
-	}
-	if config.Sk == "" || config.Pem == "" {
-		panic("missing either pem or sk filepath")
-	}
-	if len(config.Handlers) == 0 {
-		panic("no handlers defined")
-	}
 	var debugout io.Writer
 	switch config.Debug {
 	case "":
@@ -79,6 +64,7 @@ func init() {
 		}
 		debugout = f
 	}
+
 	errLogger := log.New(os.Stderr, "[error] ", log.LstdFlags)
 	infoLogger := log.New(os.Stdout, "[info] ", log.LstdFlags)
 	debugLogger := log.New(debugout, "[debug] ", log.LstdFlags)
@@ -92,6 +78,28 @@ func init() {
 			debugLogger.Printf(s, a...)
 		}
 	}
+
+	f, err := os.ReadFile(*configFilepath)
+	if err != nil {
+		logger.Errf("Couldn't open config file: [file=%s, err=%s]", *configFilepath, err)
+		os.Exit(1)
+	}
+	if err := json.Unmarshal(f, &config); err != nil {
+		logger.Errf("Couldn't parse config file as json: [file=%s, err=%s]", *configFilepath, err)
+		os.Exit(1)
+	}
+	if _, err := os.Stat(config.Sk); err != nil {
+		logger.Errf("Couldn't open sk file: [sk=%s, err=%s]", config.Sk, err)
+		os.Exit(1)
+	}
+	if _, err := os.Stat(config.Pem); err != nil {
+		logger.Errf("Couldn't open pem file: [pem=%s, err=%s]", config.Pem, err)
+		os.Exit(1)
+	}
+	if len(config.Handlers) == 0 {
+		logger.Errf("No handlers defined, nothing to do...")
+		os.Exit(1)
+	}
 }
 
 type mux struct {
@@ -99,25 +107,30 @@ type mux struct {
 }
 
 func (h mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	dump, err := httputil.DumpRequest(r, true)
-	if err != nil {
-		logger.Errf("httputil.DumpRequest() = err: %q", err)
+	if *verboseRequests {
+		dump, err := httputil.DumpRequest(r, true)
+		if err != nil {
+			logger.Debugf("Failed to get dump of request: [err=%q]", err)
+		}
+		logger.Debugf("Request dump: [dump=%q]", dump)
 	}
-	logger.Debugf("redirect dump: %q", dump)
 
 	if _, ok := h.handlers[r.Host]; !ok {
 		w.WriteHeader(http.StatusBadRequest)
+		logger.Errf("Failed to handle host: [host=%s]", r.Host)
 		return
 	}
 	h.handlers[r.Host](w, r)
 }
 
 func redirect(w http.ResponseWriter, r *http.Request) {
-	dump, err := httputil.DumpRequest(r, true)
-	if err != nil {
-		logger.Errf("httputil.DumpRequest() = err: %q", err)
+	if *verboseRequests {
+		dump, err := httputil.DumpRequest(r, true)
+		if err != nil {
+			logger.Debugf("Failed to get dump of request: [err=%q]", err)
+		}
+		logger.Debugf("Request dump: [dump=%q]", dump)
 	}
-	logger.Debugf("redirect dump: %q", dump)
 
 	target := fmt.Sprintf("https://%s%s", r.Host, r.URL.Path)
 	logger.Infof("redirecting to: %s", target)

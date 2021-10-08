@@ -20,7 +20,7 @@ type Routes struct {
 func (ro Routes) HandleApi(surl string) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
-			ro.Logger.Errf("invalid method: %s", r.Method)
+			ro.Logger.Errf("Invalid method: [method=%s]", r.Method)
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
@@ -29,7 +29,7 @@ func (ro Routes) HandleApi(surl string) func(w http.ResponseWriter, r *http.Requ
 		w.Header().Set("Access-Control-Allow-Origin", "https://alazarte.com")
 		url, err := url.Parse(surl)
 		if err != nil {
-			ro.Logger.Errf("failed to parse target as url: %s", url)
+			ro.Logger.Errf("Failed to parse target as url: [url=%s, err=%s]", url)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -46,7 +46,7 @@ func (ro Routes) HandleApi(surl string) func(w http.ResponseWriter, r *http.Requ
 		}
 		b, err := io.ReadAll(res.Body)
 		if err != nil {
-			ro.Logger.Errf("error reading response from API: %s", err)
+			ro.Logger.Errf("Failed reading body from API response: [err=%s]", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -60,7 +60,7 @@ func (ro Routes) HandleApi(surl string) func(w http.ResponseWriter, r *http.Requ
 
 func (ro Routes) HandlePublicFiles(path string) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		ro.Logger.Infof("serving file: %s%s", path, r.URL.Path)
+		ro.Logger.Infof("Serving file: [url=%s%s]", path, r.URL.Path)
 		http.ServeFile(w, r, fmt.Sprintf("%s%s", path, r.URL.Path))
 	}
 }
@@ -69,12 +69,12 @@ func (ro Routes) HandleRoot(root string, extraHeaders map[string]string, customP
 	return func(w http.ResponseWriter, r *http.Request) {
 		ro.Logger.Infof("request: %s, %s, %s", r.Method, r.Host, r.URL.Path)
 		if h, ok := customPaths[r.URL.Path]; ok {
-			ro.Logger.Infof("handling custom path")
+			ro.Logger.Infof("HandleRoot: Handling custom path: [path=%s]", r.URL.Path)
 			h(w, r)
 			return
 		}
 		if r.Method != http.MethodGet {
-			ro.Logger.Errf("invalid method:", r.Method)
+			ro.Logger.Errf("HandleRoot: Invalid method: [method=%s]", r.Method)
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
@@ -88,7 +88,7 @@ func (ro Routes) HandleRoot(root string, extraHeaders map[string]string, customP
 		case ".html":
 			f, err := os.Open(path.Join(root, r.URL.Path))
 			if err != nil {
-				ro.Logger.Errf("%s", err)
+				ro.Logger.Errf("HandleRoot: Failed to read html file: [err=%s]", err)
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}
@@ -96,7 +96,7 @@ func (ro Routes) HandleRoot(root string, extraHeaders map[string]string, customP
 				w.Header().Set(k, v)
 			}
 			if _, err := io.Copy(w, f); err != nil {
-				ro.Logger.Errf("%s", err)
+				ro.Logger.Errf("HandleRoot: Failed to write file to ResponseWriter: [err=%s]", err)
 				w.WriteHeader(http.StatusInternalServerError)
 			}
 		default:
