@@ -11,12 +11,6 @@
           "name": "",
           "value": ""
         }
-      ],
-      "subPaths": [
-        {
-          "name": "/upload",
-          "value": "http://targethost.com"
-        }
       ]
     },
     {

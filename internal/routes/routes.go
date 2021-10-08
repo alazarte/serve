@@ -65,14 +65,8 @@ func (ro Routes) HandlePublicFiles(path string) func(w http.ResponseWriter, r *h
 	}
 }
 
-func (ro Routes) HandleRoot(root string, extraHeaders map[string]string, customPaths map[string]func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
+func (ro Routes) HandleRoot(root string, extraHeaders map[string]string) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		ro.Logger.Infof("request: %s, %s, %s", r.Method, r.Host, r.URL.Path)
-		if h, ok := customPaths[r.URL.Path]; ok {
-			ro.Logger.Infof("HandleRoot: Handling custom path: [path=%s]", r.URL.Path)
-			h(w, r)
-			return
-		}
 		if r.Method != http.MethodGet {
 			ro.Logger.Errf("HandleRoot: Invalid method: [method=%s]", r.Method)
 			w.WriteHeader(http.StatusBadRequest)

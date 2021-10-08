@@ -27,11 +27,10 @@ type KeyVal struct {
 }
 
 type Handler struct {
-	Name     string   `json:"name"`
-	Type     string   `json:"type"`
-	Path     string   `json:"path"`
-	SubPaths []KeyVal `json:"subPaths"`
-	Headers  []KeyVal `json:"headers"`
+	Name    string   `json:"name"`
+	Type    string   `json:"type"`
+	Path    string   `json:"path"`
+	Headers []KeyVal `json:"headers"`
 }
 
 var (
@@ -148,15 +147,11 @@ func main() {
 	for _, h := range config.Handlers {
 		switch h.Type {
 		case TypeRoot:
-			customPaths := make(map[string]func(w http.ResponseWriter, r *http.Request))
 			extraHeaders := make(map[string]string)
-			for _, p := range h.SubPaths {
-				customPaths[p.Name] = r.HandleApi(p.Value)
-			}
 			for _, h := range h.Headers {
 				extraHeaders[http.CanonicalHeaderKey(h.Name)] = h.Value
 			}
-			m.handlers[h.Name] = r.HandleRoot(h.Path, extraHeaders, customPaths)
+			m.handlers[h.Name] = r.HandleRoot(h.Path, extraHeaders)
 		case TypePublic:
 			m.handlers[h.Name] = r.HandlePublicFiles(h.Path)
 		case TypeApi:
