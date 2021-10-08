@@ -116,8 +116,8 @@ func (h mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if _, ok := h.handlers[r.Host]; !ok {
-		w.WriteHeader(http.StatusBadRequest)
 		logger.Errf("Failed to handle host: [host=%s]", r.Host)
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 	h.handlers[r.Host](w, r)
@@ -133,8 +133,8 @@ func redirect(w http.ResponseWriter, r *http.Request) {
 	}
 
 	target := fmt.Sprintf("https://%s%s", r.Host, r.URL.Path)
-	logger.Infof("redirecting to: %s", target)
 	http.Redirect(w, r, target, http.StatusTemporaryRedirect)
+	logger.Infof("Http redirect: [target=%s]", target)
 }
 
 func main() {
@@ -162,7 +162,7 @@ func main() {
 		case TypeApi:
 			m.handlers[h.Name] = r.HandleApi(h.Path)
 		default:
-			logger.Errf("handler type not recognized: %s", h.Type)
+			logger.Errf("Main: Handler type not recognized: [type=%s]", h.Type)
 		}
 	}
 

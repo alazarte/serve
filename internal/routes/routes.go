@@ -98,8 +98,11 @@ func (ro Routes) HandleRoot(root string, extraHeaders map[string]string, customP
 			if _, err := io.Copy(w, f); err != nil {
 				ro.Logger.Errf("HandleRoot: Failed to write file to ResponseWriter: [err=%s]", err)
 				w.WriteHeader(http.StatusInternalServerError)
+				return
 			}
+			ro.Logger.Infof("Serving file: [url=%s]", r.URL.Path)
 		default:
+			ro.Logger.Infof("Bad request: [path=%s]", r.URL.Path)
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
