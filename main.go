@@ -10,6 +10,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"serve/internal/gemini"
 	"serve/internal/routes"
 	"serve/internal/utils"
 )
@@ -30,6 +31,7 @@ type Handler struct {
 	Name    string   `json:"name"`
 	Type    string   `json:"type"`
 	Path    string   `json:"path"`
+	Port    string   `json:"port"`
 	Headers []KeyVal `json:"headers"`
 }
 
@@ -47,6 +49,7 @@ var (
 	TypeRoot   = "root"
 	TypePublic = "public"
 	TypeApi    = "api"
+	TypeGem    = "gemini"
 )
 
 func init() {
@@ -144,6 +147,8 @@ func main() {
 		Logger: logger,
 	}
 
+	cerr := make(chan error)
+
 	for _, h := range config.Handlers {
 		switch h.Type {
 		case TypeRoot:
@@ -156,6 +161,10 @@ func main() {
 			m.handlers[h.Name] = r.HandlePublicFiles(h.Path)
 		case TypeApi:
 			m.handlers[h.Name] = r.HandleApi(h.Path)
+		case TypeGem:
+			go func() {
+				cerr <- gemini.Serve(h.Port, config.Pem, config.Sk, h.Path)
+			}()
 		default:
 			logger.Errf("Main: Handler type not recognized: [type=%s]", h.Type)
 		}
@@ -167,7 +176,6 @@ func main() {
 		ErrorLog: log.New(os.Stderr, "[server error] ", log.LstdFlags),
 	}
 
-	cerr := make(chan error)
 	go func() {
 		cerr <- http.ListenAndServe(":80", http.HandlerFunc(redirect))
 	}()
