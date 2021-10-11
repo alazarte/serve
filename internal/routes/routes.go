@@ -3,24 +3,45 @@ package routes
 import (
 	"fmt"
 	"io"
+	"log"
 	"net/http"
+	"net/http/httputil"
 	"net/url"
 	"os"
 	"path"
 )
 
-type Routes struct {
-	Logger interface {
-		Infof(string, ...interface{})
-		Errf(string, ...interface{})
-		Debugf(string, ...interface{})
+type logger interface {
+	Infof(string, ...interface{})
+	Errf(string, ...interface{})
+	Debugf(string, ...interface{})
+}
+
+type mux struct {
+	handlers map[string]func(w http.ResponseWriter, r *http.Request)
+	verbose  bool
+	logger   logger
+}
+
+type routes struct {
+	mux    mux
+	logger logger
+}
+
+func New(logger logger) routes {
+	return routes{
+		logger: logger,
+		mux: mux{
+			logger:   logger,
+			handlers: make(map[string]func(w http.ResponseWriter, r *http.Request)),
+		},
 	}
 }
 
-func (ro Routes) HandleApi(surl string) func(w http.ResponseWriter, r *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
+func (ro *routes) HandleApi(name, surl string) {
+	ro.mux.handlers[name] = func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
-			ro.Logger.Errf("Invalid method: [method=%s]", r.Method)
+			ro.logger.Errf("Invalid method: [method=%s]", r.Method)
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
@@ -29,7 +50,7 @@ func (ro Routes) HandleApi(surl string) func(w http.ResponseWriter, r *http.Requ
 		w.Header().Set("Access-Control-Allow-Origin", "https://alazarte.com")
 		url, err := url.Parse(surl)
 		if err != nil {
-			ro.Logger.Errf("Failed to parse target as url: [url=%s, err=%s]", url)
+			ro.logger.Errf("Failed to parse target as url: [url=%s, err=%s]", url)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -40,35 +61,35 @@ func (ro Routes) HandleApi(surl string) func(w http.ResponseWriter, r *http.Requ
 		r2.RequestURI = ""
 		res, err := client.Do(r2)
 		if err != nil {
-			ro.Logger.Errf("%s", err)
+			ro.logger.Errf("%s", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 		b, err := io.ReadAll(res.Body)
 		if err != nil {
-			ro.Logger.Errf("Failed reading body from API response: [err=%s]", err)
+			ro.logger.Errf("Failed reading body from API response: [err=%s]", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 		w.WriteHeader(res.StatusCode)
 		if _, err := w.Write(b); err != nil {
-			ro.Logger.Errf("%s", err)
+			ro.logger.Errf("%s", err)
 		}
 		return
 	}
 }
 
-func (ro Routes) HandlePublicFiles(path string) func(w http.ResponseWriter, r *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		ro.Logger.Infof("Serving file: [url=%s%s]", path, r.URL.Path)
+func (ro *routes) HandlePublicFiles(name, path string) {
+	ro.mux.handlers[name] = func(w http.ResponseWriter, r *http.Request) {
+		ro.logger.Infof("Serving file: [url=%s%s]", path, r.URL.Path)
 		http.ServeFile(w, r, fmt.Sprintf("%s%s", path, r.URL.Path))
 	}
 }
 
-func (ro Routes) HandleRoot(root string, extraHeaders map[string]string) func(http.ResponseWriter, *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
+func (ro *routes) HandleRoot(name, root string, extraHeaders map[string]string) {
+	ro.mux.handlers[name] = func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
-			ro.Logger.Errf("HandleRoot: Invalid method: [method=%s]", r.Method)
+			ro.logger.Errf("HandleRoot: Invalid method: [method=%s]", r.Method)
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
@@ -82,7 +103,7 @@ func (ro Routes) HandleRoot(root string, extraHeaders map[string]string) func(ht
 		case ".html":
 			f, err := os.Open(path.Join(root, r.URL.Path))
 			if err != nil {
-				ro.Logger.Errf("HandleRoot: Failed to read html file: [err=%s]", err)
+				ro.logger.Errf("HandleRoot: Failed to read html file: [err=%s]", err)
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}
@@ -90,15 +111,58 @@ func (ro Routes) HandleRoot(root string, extraHeaders map[string]string) func(ht
 				w.Header().Set(k, v)
 			}
 			if _, err := io.Copy(w, f); err != nil {
-				ro.Logger.Errf("HandleRoot: Failed to write file to ResponseWriter: [err=%s]", err)
+				ro.logger.Errf("HandleRoot: Failed to write file to ResponseWriter: [err=%s]", err)
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
-			ro.Logger.Infof("Serving file: [url=%s]", r.URL.Path)
+			ro.logger.Infof("Serving file: [url=%s]", r.URL.Path)
 		default:
-			ro.Logger.Infof("Bad request: [path=%s]", r.URL.Path)
+			ro.logger.Infof("Bad request: [path=%s]", r.URL.Path)
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 	}
+}
+
+func (m mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if m.verbose {
+		dump, err := httputil.DumpRequest(r, true)
+		if err != nil {
+			m.logger.Debugf("Failed to get dump of request: [err=%q]", err)
+		}
+		m.logger.Debugf("Request dump: [dump=%q]", dump)
+	}
+
+	if _, ok := m.handlers[r.Host]; !ok {
+		m.logger.Errf("Failed to handle host: [host=%s]", r.Host)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	m.handlers[r.Host](w, r)
+
+}
+
+// TODO log this
+func redirect(w http.ResponseWriter, r *http.Request) {
+	http.Redirect(w, r, fmt.Sprintf("https://%s%s", r.Host, r.URL.Path), http.StatusTemporaryRedirect)
+}
+
+func (ro *routes) ListenTLS(pem, sk string) chan error {
+	cerr := make(chan error)
+
+	server := &http.Server{
+		Addr:     ":443",
+		Handler:  ro.mux,
+		ErrorLog: log.New(os.Stderr, "[server error] ", log.LstdFlags),
+	}
+
+	go func() {
+		cerr <- http.ListenAndServe(":80", http.HandlerFunc(redirect))
+	}()
+
+	go func() {
+		cerr <- server.ListenAndServeTLS(pem, sk)
+	}()
+
+	return cerr
 }

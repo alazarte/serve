@@ -7,7 +7,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"net/http/httputil"
 	"net/url"
 	"os"
 	"serve/internal/gemini"
@@ -104,50 +103,9 @@ func init() {
 	}
 }
 
-type mux struct {
-	handlers map[string]func(w http.ResponseWriter, r *http.Request)
-}
-
-func (h mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if *verboseRequests {
-		dump, err := httputil.DumpRequest(r, true)
-		if err != nil {
-			logger.Debugf("Failed to get dump of request: [err=%q]", err)
-		}
-		logger.Debugf("Request dump: [dump=%q]", dump)
-	}
-
-	if _, ok := h.handlers[r.Host]; !ok {
-		logger.Errf("Failed to handle host: [host=%s]", r.Host)
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	h.handlers[r.Host](w, r)
-}
-
-func redirect(w http.ResponseWriter, r *http.Request) {
-	if *verboseRequests {
-		dump, err := httputil.DumpRequest(r, true)
-		if err != nil {
-			logger.Debugf("Failed to get dump of request: [err=%q]", err)
-		}
-		logger.Debugf("Request dump: [dump=%q]", dump)
-	}
-
-	target := fmt.Sprintf("https://%s%s", r.Host, r.URL.Path)
-	http.Redirect(w, r, target, http.StatusTemporaryRedirect)
-	logger.Infof("Http redirect: [target=%s]", target)
-}
-
 func main() {
-	m := mux{
-		handlers: make(map[string]func(w http.ResponseWriter, r *http.Request)),
-	}
-	r := routes.Routes{
-		Logger: logger,
-	}
-
-	cerr := make(chan error)
+	r := routes.New(logger)
+	gerr := make(chan error)
 
 	for _, h := range config.Handlers {
 		switch h.Type {
@@ -156,34 +114,28 @@ func main() {
 			for _, h := range h.Headers {
 				extraHeaders[http.CanonicalHeaderKey(h.Name)] = h.Value
 			}
-			m.handlers[h.Name] = r.HandleRoot(h.Path, extraHeaders)
+			r.HandleRoot(h.Name, h.Path, extraHeaders)
 		case TypePublic:
-			m.handlers[h.Name] = r.HandlePublicFiles(h.Path)
+			r.HandlePublicFiles(h.Name, h.Path)
 		case TypeApi:
-			m.handlers[h.Name] = r.HandleApi(h.Path)
+			r.HandleApi(h.Name, h.Path)
 		case TypeGem:
 			go func() {
-				cerr <- gemini.Serve(h.Port, config.Pem, config.Sk, h.Path)
+				gerr <- gemini.Serve(h.Port, config.Pem, config.Sk, h.Path)
 			}()
 		default:
 			logger.Errf("Main: Handler type not recognized: [type=%s]", h.Type)
 		}
 	}
 
-	server := &http.Server{
-		Addr:     ":443",
-		Handler:  m,
-		ErrorLog: log.New(os.Stderr, "[server error] ", log.LstdFlags),
-	}
+	cerr := r.ListenTLS(config.Pem, config.Sk)
 
-	go func() {
-		cerr <- http.ListenAndServe(":80", http.HandlerFunc(redirect))
-	}()
-
-	go func() {
-		cerr <- server.ListenAndServeTLS(config.Pem, config.Sk)
-	}()
 	for {
-		logger.Errf(fmt.Sprintln(<-cerr))
+		select {
+		case err := <-gerr:
+			logger.Errf("gemini error: [err=%s]", err)
+		case err := <-cerr:
+			logger.Errf("gemini error: [err=%s]", err)
+		}
 	}
 }
