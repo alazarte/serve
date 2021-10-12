@@ -81,7 +81,7 @@ func (ro *routes) HandleApi(name, surl string) {
 
 func (ro *routes) HandlePublicFiles(name, path string) {
 	ro.mux.handlers[name] = func(w http.ResponseWriter, r *http.Request) {
-		ro.logger.Infof("Serving file: [url=%s%s]", path, r.URL.Path)
+		ro.logger.Infof("Serving file: [url=%s%s, from=%s]", path, r.URL.Path, r.RemoteAddr)
 		http.ServeFile(w, r, fmt.Sprintf("%s%s", path, r.URL.Path))
 	}
 }
@@ -115,7 +115,7 @@ func (ro *routes) HandleRoot(name, root string, extraHeaders map[string]string) 
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
-			ro.logger.Infof("Serving file: [url=%s]", r.URL.Path)
+			ro.logger.Infof("Serving file: [url=%s, from=%s]", r.URL.Path, r.RemoteAddr)
 		default:
 			ro.logger.Infof("Bad request: [path=%s]", r.URL.Path)
 			w.WriteHeader(http.StatusBadRequest)

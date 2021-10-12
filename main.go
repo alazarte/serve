@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"serve/internal/gemini"
 	"serve/internal/routes"
 	"serve/internal/utils"
 )
@@ -48,7 +47,6 @@ var (
 	TypeRoot   = "root"
 	TypePublic = "public"
 	TypeApi    = "api"
-	TypeGem    = "gemini"
 )
 
 func init() {
@@ -105,7 +103,6 @@ func init() {
 
 func main() {
 	r := routes.New(logger)
-	gerr := make(chan error)
 
 	for _, h := range config.Handlers {
 		switch h.Type {
@@ -119,10 +116,6 @@ func main() {
 			r.HandlePublicFiles(h.Name, h.Path)
 		case TypeApi:
 			r.HandleApi(h.Name, h.Path)
-		case TypeGem:
-			go func() {
-				gerr <- gemini.Serve(h.Port, config.Pem, config.Sk, h.Path)
-			}()
 		default:
 			logger.Errf("Main: Handler type not recognized: [type=%s]", h.Type)
 		}
@@ -131,11 +124,6 @@ func main() {
 	cerr := r.ListenTLS(config.Pem, config.Sk)
 
 	for {
-		select {
-		case err := <-gerr:
-			logger.Errf("gemini error: [err=%s]", err)
-		case err := <-cerr:
-			logger.Errf("gemini error: [err=%s]", err)
-		}
+		logger.Errf("gemini error: [err=%s]", cerr)
 	}
 }
