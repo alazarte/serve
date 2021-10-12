@@ -124,6 +124,6 @@ func main() {
 	cerr := r.ListenTLS(config.Pem, config.Sk)
 
 	for {
-		logger.Errf("gemini error: [err=%s]", cerr)
+		logger.Errf("server error: [err=%s]", <-cerr)
 	}
 }
