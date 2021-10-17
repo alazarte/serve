@@ -46,7 +46,7 @@ var (
 
 	TypeRoot   = "root"
 	TypePublic = "public"
-	TypeApi    = "api"
+	TypeProxy  = "proxy"
 )
 
 func init() {
@@ -114,8 +114,8 @@ func main() {
 			r.HandleRoot(h.Name, h.Path, extraHeaders)
 		case TypePublic:
 			r.HandlePublicFiles(h.Name, h.Path)
-		case TypeApi:
-			r.HandleApi(h.Name, h.Path)
+		case TypeProxy:
+			r.HandleProxy(h.Name, h.Path)
 		default:
 			logger.Errf("Main: Handler type not recognized: [type=%s]", h.Type)
 		}

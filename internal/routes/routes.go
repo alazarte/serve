@@ -38,51 +38,41 @@ func New(logger logger) routes {
 	}
 }
 
-func (ro *routes) HandleApi(name, surl string) {
-	ro.mux.handlers[name] = func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			ro.logger.Errf("Invalid method: [method=%s]", r.Method)
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-		// TODO to accept multiple clients, should compare to
-		// previously known hosts and return the origin
-		w.Header().Set("Access-Control-Allow-Origin", "https://alazarte.com")
-		url, err := url.Parse(surl)
-		if err != nil {
-			ro.logger.Errf("Failed to parse target as url: [url=%s, err=%s]", url)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		client := http.Client{}
-		r2 := new(http.Request)
-		*r2 = *r
-		r2.URL = url
-		r2.RequestURI = ""
-		res, err := client.Do(r2)
-		if err != nil {
-			ro.logger.Errf("%s", err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		b, err := io.ReadAll(res.Body)
-		if err != nil {
-			ro.logger.Errf("Failed reading body from API response: [err=%s]", err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		w.WriteHeader(res.StatusCode)
-		if _, err := w.Write(b); err != nil {
-			ro.logger.Errf("%s", err)
-		}
-		return
-	}
-}
-
 func (ro *routes) HandlePublicFiles(name, path string) {
 	ro.mux.handlers[name] = func(w http.ResponseWriter, r *http.Request) {
 		ro.logger.Infof("Serving file: [url=%s%s, from=%s]", path, r.URL.Path, r.RemoteAddr)
 		http.ServeFile(w, r, fmt.Sprintf("%s%s", path, r.URL.Path))
+	}
+}
+
+func (ro *routes) HandleProxy(name, surl string) {
+	ro.mux.handlers[name] = func(w http.ResponseWriter, r *http.Request) {
+		url, err := url.Parse(fmt.Sprintf("%s%s", surl, r.URL.Path))
+		if err != nil {
+			ro.logger.Errf("HandleProxy: Failed to parse target as url: [url=%s, err=%s]", url)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		r.URL = url
+		r.RequestURI = ""
+		r.Host = "alazarte.com"
+		client := http.Client{}
+		res, err := client.Do(r)
+		if err != nil {
+			ro.logger.Errf("Error proxying request: [err=%s]", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Access-Control-Allow-Origin", "https://alazarte.com")
+		w.Header().Set("content-type", r.Header.Get("content-type"))
+		if _, err := io.Copy(w, res.Body); err != nil {
+			ro.logger.Errf("Error proxying request: [err=%s]", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		if res.StatusCode != http.StatusOK {
+			w.WriteHeader(res.StatusCode)
+		}
 	}
 }
 
