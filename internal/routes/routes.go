@@ -47,7 +47,7 @@ func (ro *routes) HandlePublicFiles(name, path string) {
 
 func (ro *routes) HandleProxy(name, surl string) {
 	ro.mux.handlers[name] = func(w http.ResponseWriter, r *http.Request) {
-		url, err := url.Parse(fmt.Sprintf("%s%s", surl, r.URL.Path))
+		url, err := url.Parse(fmt.Sprintf("%s%s?%s", surl, r.URL.Path, r.URL.RawQuery))
 		if err != nil {
 			ro.logger.Errf("HandleProxy: Failed to parse target as url: [url=%s, err=%s]", url)
 			w.WriteHeader(http.StatusInternalServerError)
