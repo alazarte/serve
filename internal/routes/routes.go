@@ -13,15 +13,16 @@ import (
 )
 
 const (
-	DIR_TEMPLATE = `
-<style>
-body {
-  background-color: lightgray;
-}
-</style>
+	DIR_TEMPLATE = `<head>
+<link rel="stylesheet" type="text/css" href="/style.css" />
+</head>
+<body>
+<h1>alazarte</h1>
+[<a href="https://alazarte.com">home</a>] <hr/>
 {{range .}}
 <a href='{{.}}'>{{.}}</a> <br/>
 {{end}}
+</body>
 `
 )
 
@@ -46,7 +47,6 @@ func New(logger logger) routes {
 	return routes{
 		logger: logger,
 		mux: mux{
-			logger:   logger,
 			handlers: make(map[string]func(w http.ResponseWriter, r *http.Request)),
 		},
 	}
