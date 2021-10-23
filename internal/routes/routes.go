@@ -19,9 +19,13 @@ const (
 <body>
 <h1>alazarte</h1>
 [<a href="https://alazarte.com">home</a>] <hr/>
+<table>
 {{range .}}
-<a href='{{.}}'>{{.}}</a> <br/>
+<tr>
+<td><a href='{{.}}'>{{.}}</a></td>
+</tr>
 {{end}}
+</table>
 </body>
 `
 )
@@ -95,7 +99,7 @@ func (ro *routes) HandlePublicFiles(name, path string) {
 		}
 		sList := listEntries(list)
 		if r.URL.Path != "/" {
-			sList = append([]string{".."}, sList...)
+			sList = append([]string{"../"}, sList...)
 		}
 		if err := t.Execute(w, sList); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
