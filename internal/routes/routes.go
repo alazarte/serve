@@ -9,6 +9,20 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"text/template"
+)
+
+const (
+	DIR_TEMPLATE = `
+<style>
+body {
+  background-color: lightgray;
+}
+</style>
+{{range .}}
+<a href='{{.}}'>{{.}}</a> <br/>
+{{end}}
+`
 )
 
 type logger interface {
@@ -38,10 +52,55 @@ func New(logger logger) routes {
 	}
 }
 
+func listEntries(dirs []os.DirEntry) []string {
+	list := []string{}
+	for _, d := range dirs {
+		name := d.Name()
+		if d.IsDir() {
+			name = name + "/"
+		}
+		list = append(list, name)
+	}
+	return list
+}
+
 func (ro *routes) HandlePublicFiles(name, path string) {
 	ro.mux.handlers[name] = func(w http.ResponseWriter, r *http.Request) {
 		ro.logger.Infof("Serving file: [url=%s%s, from=%s]", path, r.URL.Path, r.RemoteAddr)
-		http.ServeFile(w, r, fmt.Sprintf("%s%s", path, r.URL.Path))
+		filename := fmt.Sprintf("%s%s", path, r.URL.Path)
+		stat, err := os.Stat(filename)
+		if err != nil {
+			w.WriteHeader(http.StatusNotFound)
+			w.Write([]byte("<h1>Not found</h1>"))
+			return
+		}
+		if !stat.IsDir() {
+			f, err := os.Open(filename)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			http.ServeContent(w, r, filename, stat.ModTime(), f)
+			return
+		}
+		list, err := os.ReadDir(filename)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		t, err := template.New("dir").Parse(DIR_TEMPLATE)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		sList := listEntries(list)
+		if r.URL.Path != "/" {
+			sList = append([]string{".."}, sList...)
+		}
+		if err := t.Execute(w, sList); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 	}
 }
 
