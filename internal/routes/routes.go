@@ -9,6 +9,8 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"path/filepath"
+	"regexp"
 	"text/template"
 )
 
@@ -110,6 +112,11 @@ func (ro *routes) HandlePublicFiles(name, path string) {
 
 func (ro *routes) HandleProxy(name, surl string) {
 	ro.mux.handlers[name] = func(w http.ResponseWriter, r *http.Request) {
+		if ok, err := regexp.MatchString("go-get=1", r.URL.RawQuery); err == nil && ok {
+			module := filepath.Base(r.URL.Path)
+			w.Write([]byte(fmt.Sprintf("<meta name=\"go-import\" content=\"git.alazarte.com/%s git https://git.alazarte.com/cgit.cgi/%s/\">", module)))
+			return
+		}
 		url, err := url.Parse(fmt.Sprintf("%s%s?%s", surl, r.URL.Path, r.URL.RawQuery))
 		if err != nil {
 			ro.logger.Errf("HandleProxy: Failed to parse target as url: [url=%s, err=%s]", url)
