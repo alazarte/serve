@@ -185,6 +185,11 @@ func (ro *routes) HandleRoot(name, root string, extraHeaders map[string]string) 
 }
 
 func (m mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r == nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
 	if m.verbose {
 		dump, err := httputil.DumpRequest(r, true)
 		if err != nil {
