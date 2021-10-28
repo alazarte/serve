@@ -19,7 +19,7 @@ type Config struct {
 	Handlers []Handler `json:"handlers"`
 }
 
-type KeyVal struct {
+type Header struct {
 	Name  string `json:"name"`
 	Value string `json:"value"`
 }
@@ -29,7 +29,7 @@ type Handler struct {
 	Type    string   `json:"type"`
 	Path    string   `json:"path"`
 	Port    string   `json:"port"`
-	Headers []KeyVal `json:"headers"`
+	Headers []Header `json:"headers"`
 }
 
 var (

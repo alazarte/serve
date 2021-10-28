@@ -5,7 +5,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"net/http/httputil"
 	"net/url"
 	"os"
 	"path"
@@ -40,7 +39,6 @@ type logger interface {
 
 type mux struct {
 	handlers map[string]func(w http.ResponseWriter, r *http.Request)
-	verbose  bool
 	logger   logger
 }
 
@@ -58,7 +56,7 @@ func New(logger logger) routes {
 	}
 }
 
-func listEntries(dirs []os.DirEntry) []string {
+func listDirEntries(dirs []os.DirEntry) []string {
 	list := []string{}
 	for _, d := range dirs {
 		name := d.Name()
@@ -72,12 +70,12 @@ func listEntries(dirs []os.DirEntry) []string {
 
 func (ro *routes) HandlePublicFiles(name, path string) {
 	ro.mux.handlers[name] = func(w http.ResponseWriter, r *http.Request) {
-		ro.logger.Infof("Serving file: [url=%s%s, from=%s]", path, r.URL.Path, r.RemoteAddr)
 		filename := fmt.Sprintf("%s%s", path, r.URL.Path)
 		stat, err := os.Stat(filename)
 		if err != nil {
 			w.WriteHeader(http.StatusNotFound)
 			w.Write([]byte("<h1>Not found</h1>"))
+			ro.logger.Infof("File not found: [url=%s%s, from=%s]", path, r.URL.Path, r.RemoteAddr)
 			return
 		}
 		if !stat.IsDir() {
@@ -87,26 +85,31 @@ func (ro *routes) HandlePublicFiles(name, path string) {
 				return
 			}
 			http.ServeContent(w, r, filename, stat.ModTime(), f)
+			ro.logger.Infof("Serving file: [url=%s%s, from=%s]", path, r.URL.Path, r.RemoteAddr)
 			return
 		}
 		list, err := os.ReadDir(filename)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
+			ro.logger.Errf("os.ReadDir(%s): [err=%s]", filename, err)
 			return
 		}
 		t, err := template.New("dir").Parse(DIR_TEMPLATE)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
+			ro.logger.Errf("template.New(): [err=%s]", err)
 			return
 		}
-		sList := listEntries(list)
+		sList := listDirEntries(list)
 		if r.URL.Path != "/" {
 			sList = append([]string{"../"}, sList...)
 		}
 		if err := t.Execute(w, sList); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
+			ro.logger.Errf("t.Execute(w, sList=[%s]): [err=%s]", sList, err)
 			return
 		}
+		ro.logger.Infof("Serving dir list: [url=%s%s, from=%s]", path, r.URL.Path, r.RemoteAddr)
 	}
 }
 
@@ -129,8 +132,8 @@ func (ro *routes) HandleProxy(name, surl string) {
 		client := http.Client{}
 		res, err := client.Do(r)
 		if err != nil {
-			ro.logger.Errf("Error proxying request: [err=%s]", err)
 			w.WriteHeader(http.StatusInternalServerError)
+			ro.logger.Errf("client.Do(%#v): [err=%s]", r, err)
 			return
 		}
 		w.Header().Set("Access-Control-Allow-Origin", "https://alazarte.com")
@@ -188,14 +191,6 @@ func (m mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r == nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
-	}
-
-	if m.verbose {
-		dump, err := httputil.DumpRequest(r, true)
-		if err != nil {
-			m.logger.Debugf("Failed to get dump of request: [err=%q]", err)
-		}
-		m.logger.Debugf("Request dump: [dump=%q]", dump)
 	}
 
 	if _, ok := m.handlers[r.Host]; !ok {
