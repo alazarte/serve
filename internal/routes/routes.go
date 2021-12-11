@@ -73,9 +73,8 @@ func (ro *routes) HandlePublicFiles(name, path string) {
 		filename := fmt.Sprintf("%s%s", path, r.URL.Path)
 		stat, err := os.Stat(filename)
 		if err != nil {
-			w.WriteHeader(http.StatusNotFound)
-			w.Write([]byte("<h1>Not found</h1>"))
-			ro.logger.Infof("File not found: [url=%s%s, from=%s]", path, r.URL.Path, r.RemoteAddr)
+			r.URL.Path = "/404.html"
+			redirect(w, r)
 			return
 		}
 		if !stat.IsDir() {
