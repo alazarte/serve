@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"fmt"
 	"io"
 	"log"
 )
@@ -28,17 +29,9 @@ func (l Logger) Debugf(s string, a ...interface{}) {
 }
 
 func New(outInfo, outErr, outDebug io.Writer) Logger {
-	infoLogger := log.New(outInfo, "[info] ", log.LstdFlags)
-	errLogger := log.New(outErr, "[error] ", log.LstdFlags)
-	debugLogger := log.New(outDebug, "[debug] ", log.LstdFlags)
+	logger := log.New(outInfo, "", log.LstdFlags)
 	return func(t LogType, s string, a ...interface{}) {
-		switch t {
-		case Info:
-			infoLogger.Printf(s, a...)
-		case Error:
-			errLogger.Printf(s, a...)
-		default:
-			debugLogger.Printf(s, a...)
-		}
+		s = fmt.Sprintf("[%s] %s", string(t), s)
+		logger.Printf(s, a...)
 	}
 }

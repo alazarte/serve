@@ -70,6 +70,7 @@ func listDirEntries(dirs []os.DirEntry) []string {
 
 func (ro *routes) HandlePublicFiles(name, path string) {
 	ro.mux.handlers[name] = func(w http.ResponseWriter, r *http.Request) {
+		ro.logger.Debugf("HandlePublicFiles: dumping request: %+v", r)
 		filename := fmt.Sprintf("%s%s", path, r.URL.Path)
 		stat, err := os.Stat(filename)
 		if err != nil {
@@ -114,6 +115,7 @@ func (ro *routes) HandlePublicFiles(name, path string) {
 
 func (ro *routes) HandleProxy(name, surl string) {
 	ro.mux.handlers[name] = func(w http.ResponseWriter, r *http.Request) {
+		ro.logger.Debugf("HandleProxy: dumping request: %+v", r)
 		if ok, err := regexp.MatchString("go-get=1", r.URL.RawQuery); err == nil && ok {
 			module := filepath.Base(r.URL.Path)
 			w.Write([]byte(fmt.Sprintf("<meta name=\"go-import\" content=\"git.alazarte.com/%s git https://git.alazarte.com/cgit.cgi/%s/\">", module)))
@@ -121,8 +123,8 @@ func (ro *routes) HandleProxy(name, surl string) {
 		}
 		url, err := url.Parse(fmt.Sprintf("%s%s?%s", surl, r.URL.Path, r.URL.RawQuery))
 		if err != nil {
-			ro.logger.Errf("HandleProxy: Failed to parse target as url: [url=%s, err=%s]", url)
 			w.WriteHeader(http.StatusInternalServerError)
+			ro.logger.Errf("HandleProxy: Failed to parse target as url: [url=%s, err=%s]", url)
 			return
 		}
 		r.URL = url
@@ -138,21 +140,23 @@ func (ro *routes) HandleProxy(name, surl string) {
 		w.Header().Set("Access-Control-Allow-Origin", "https://alazarte.com")
 		w.Header().Set("content-type", r.Header.Get("content-type"))
 		if _, err := io.Copy(w, res.Body); err != nil {
-			ro.logger.Errf("Error proxying request: [err=%s]", err)
 			w.WriteHeader(http.StatusInternalServerError)
+			ro.logger.Errf("Error proxying request: [err=%s]", err)
 			return
 		}
 		if res.StatusCode != http.StatusOK {
 			w.WriteHeader(res.StatusCode)
+			return
 		}
 	}
 }
 
 func (ro *routes) HandleRoot(name, root string, extraHeaders map[string]string) {
 	ro.mux.handlers[name] = func(w http.ResponseWriter, r *http.Request) {
+		ro.logger.Debugf("HandleRoot: dumping request: %+v", r)
 		if r.Method != http.MethodGet {
-			ro.logger.Errf("HandleRoot: Invalid method: [method=%s]", r.Method)
 			w.WriteHeader(http.StatusBadRequest)
+			ro.logger.Errf("HandleRoot: Invalid method: [method=%s]", r.Method)
 			return
 		}
 		if r.URL.Path == "/" {
@@ -165,16 +169,16 @@ func (ro *routes) HandleRoot(name, root string, extraHeaders map[string]string) 
 		case ".html":
 			f, err := os.Open(path.Join(root, r.URL.Path))
 			if err != nil {
-				ro.logger.Errf("HandleRoot: Failed to read html file: [err=%s]", err)
 				w.WriteHeader(http.StatusNotFound)
+				ro.logger.Errf("HandleRoot: Failed to read html file: [err=%s]", err)
 				return
 			}
 			for k, v := range extraHeaders {
 				w.Header().Set(k, v)
 			}
 			if _, err := io.Copy(w, f); err != nil {
-				ro.logger.Errf("HandleRoot: Failed to write file to ResponseWriter: [err=%s]", err)
 				w.WriteHeader(http.StatusInternalServerError)
+				ro.logger.Errf("HandleRoot: Failed to write file to ResponseWriter: [err=%s]", err)
 				return
 			}
 			ro.logger.Infof("Serving file: [url=%s, from=%s]", r.URL.Path, r.RemoteAddr)
@@ -193,12 +197,12 @@ func (m mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if _, ok := m.handlers[r.Host]; !ok {
-		m.logger.Errf("Failed to handle host: [host=%s]", r.Host)
-		w.WriteHeader(http.StatusBadRequest)
+		if w != nil {
+			w.WriteHeader(http.StatusBadRequest)
+		}
 		return
 	}
 	m.handlers[r.Host](w, r)
-
 }
 
 // TODO log this
