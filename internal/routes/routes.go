@@ -74,6 +74,11 @@ func (ro *routes) HandlePublicFiles(name, path string) {
 		filename := fmt.Sprintf("%s%s", path, r.URL.Path)
 		stat, err := os.Stat(filename)
 		if err != nil {
+			if r.URL.Path == "/404.html" {
+				w.Write([]byte("404 Error"))
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
 			r.URL.Path = "/404.html"
 			redirect(w, r)
 			return
