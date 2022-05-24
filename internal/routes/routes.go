@@ -123,7 +123,7 @@ func (ro *routes) HandleProxy(name, surl string) {
 		ro.logger.Debugf("HandleProxy: dumping request: %+v", r)
 		if ok, err := regexp.MatchString("go-get=1", r.URL.RawQuery); err == nil && ok {
 			module := filepath.Base(r.URL.Path)
-			w.Write([]byte(fmt.Sprintf("<meta name=\"go-import\" content=\"git.alazarte.com/%s git https://git.alazarte.com/cgit.cgi/%s/\">", module)))
+			w.Write([]byte(fmt.Sprintf("<meta name=\"go-import\" content=\"git.alazarte.com/%s git https://git.alazarte.com/cgit.cgi/%s/\">", module, module)))
 			return
 		}
 		url, err := url.Parse(fmt.Sprintf("%s%s?%s", surl, r.URL.Path, r.URL.RawQuery))
