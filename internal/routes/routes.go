@@ -171,6 +171,8 @@ func (ro *routes) HandleRoot(name, root string, extraHeaders map[string]string) 
 		case ".css":
 			w.Header().Set("content-type", "text/css; charset=utf-8")
 			fallthrough
+		case ".ico":
+			fallthrough
 		case ".html":
 			f, err := os.Open(path.Join(root, r.URL.Path))
 			if err != nil {
