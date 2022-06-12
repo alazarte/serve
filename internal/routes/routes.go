@@ -29,6 +29,10 @@ const (
 </table>
 </body>
 `
+
+	INTERNAL_SERVER_ERROR = `<h2>Internal Server Error</h2>
+<p>Found a problem when handling the request</p>
+`
 )
 
 type logger interface {
@@ -138,7 +142,9 @@ func (ro *routes) HandleProxy(name, surl string) {
 		client := http.Client{}
 		res, err := client.Do(r)
 		if err != nil {
+			w.Header().Set("content-type", "text/html")
 			w.WriteHeader(http.StatusInternalServerError)
+                        w.Write([]byte(INTERNAL_SERVER_ERROR))
 			ro.logger.Errf("client.Do(%#v): [err=%s]", r, err)
 			return
 		}
