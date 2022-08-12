@@ -6,15 +6,28 @@ import (
 	"log"
 )
 
-type LogType string
+type LogLevel uint8
 
-var (
-	Info  LogType = "info"
-	Error LogType = "error"
-	Debug LogType = "debug"
+const (
+	Debug LogLevel = iota
+	Info
+	Error
 )
 
-type Logger func(LogType, string, ...interface{})
+func logLevelText(l LogLevel) string {
+	switch l {
+	case Info:
+		return "info"
+	case Error:
+		return "error"
+	case Debug:
+		return "debug"
+	default:
+		return "invalid"
+	}
+}
+
+type Logger func(LogLevel, string, ...interface{})
 
 func (l Logger) Errf(s string, a ...interface{}) {
 	l(Error, s, a...)
@@ -28,10 +41,18 @@ func (l Logger) Debugf(s string, a ...interface{}) {
 	l(Debug, s, a...)
 }
 
-func New(outInfo, outErr, outDebug io.Writer) Logger {
-	logger := log.New(outInfo, "", log.LstdFlags)
-	return func(t LogType, s string, a ...interface{}) {
-		s = fmt.Sprintf("[%s] %s", string(t), s)
+func (a LogLevel) Bigger(b LogLevel) bool {
+	return a > b
+}
+
+func New(output io.Writer, level LogLevel) Logger {
+	logger := log.New(output, "", log.LstdFlags)
+	return func(t LogLevel, s string, a ...interface{}) {
+		if level.Bigger(t) {
+			return
+		}
+
+		s = fmt.Sprintf("[%s] %s", logLevelText(t), s)
 		logger.Printf(s, a...)
 	}
 }

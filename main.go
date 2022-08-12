@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"serve/internal/logger"
 	"serve/internal/routes"
@@ -33,13 +32,8 @@ type Handler struct {
 }
 
 var (
-	l logger.Logger
-
-	postUrl *url.URL
-
 	config Config
 
-	debugFile       = flag.String("debug", "", "filepath to print debug logs to, default is io.Discard")
 	configFilepath  = flag.String("config", "/etc/serve.json", "config filepath")
 	verboseRequests = flag.Bool("verboseRequest", false, "dump requests to debug log")
 
@@ -48,10 +42,9 @@ var (
 	TypeProxy  = "proxy"
 )
 
-func init() {
-	flag.Parse()
+func getLogOutput() io.Writer {
+	var debugOut io.Writer = io.Discard
 
-	var debugOut io.Writer
 	switch config.Debug {
 	case "":
 		debugOut = io.Discard
@@ -63,32 +56,37 @@ func init() {
 		debugOut = f
 	}
 
-	l = logger.New(os.Stdout, os.Stderr, debugOut)
+	return debugOut
+}
+
+func init() {
+	flag.Parse()
 
 	f, err := os.ReadFile(*configFilepath)
 	if err != nil {
-		l.Errf("Couldn't open config file: [file=%s, err=%s]", *configFilepath, err)
+		fmt.Printf("Couldn't open config file: [file=%s, err=%s]", *configFilepath, err)
 		os.Exit(1)
 	}
 	if err := json.Unmarshal(f, &config); err != nil {
-		l.Errf("Couldn't parse config file as json: [file=%s, err=%s]", *configFilepath, err)
+		fmt.Printf("Couldn't parse config file as json: [file=%s, err=%s]", *configFilepath, err)
 		os.Exit(1)
 	}
 	if _, err := os.Stat(config.Sk); err != nil {
-		l.Errf("Couldn't open sk file: [sk=%s, err=%s]", config.Sk, err)
+		fmt.Printf("Couldn't open sk file: [sk=%s, err=%s]", config.Sk, err)
 		os.Exit(1)
 	}
 	if _, err := os.Stat(config.Pem); err != nil {
-		l.Errf("Couldn't open pem file: [pem=%s, err=%s]", config.Pem, err)
+		fmt.Printf("Couldn't open pem file: [pem=%s, err=%s]", config.Pem, err)
 		os.Exit(1)
 	}
 	if len(config.Handlers) == 0 {
-		l.Errf("No handlers defined, nothing to do...")
+		fmt.Printf("No handlers defined, nothing to do...")
 		os.Exit(1)
 	}
 }
 
 func main() {
+	l := logger.New(os.Stdout, logger.Info)
 	r := routes.New(l)
 
 	for _, h := range config.Handlers {
@@ -104,13 +102,13 @@ func main() {
 		case TypeProxy:
 			r.HandleProxy(h.Name, h.Path)
 		default:
-			l.Errf("Main: Handler type not recognized: [type=%s]", h.Type)
+			fmt.Printf("Main: Handler type not recognized: [type=%s]", h.Type)
 		}
 	}
 
 	cerr := r.ListenTLS(config.Pem, config.Sk)
 
 	for {
-		l.Errf("server error: [err=%s]", <-cerr)
+		fmt.Printf("server error: [err=%s]", <-cerr)
 	}
 }
