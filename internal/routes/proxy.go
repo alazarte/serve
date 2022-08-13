@@ -11,30 +11,30 @@ import (
 
 func (ro *routes) HandleProxy(name, from string) {
 	ro.mux.handlers[name] = func(w http.ResponseWriter, r *http.Request) {
-		ro.logger.Infof("HandleProxy: %s %s %s", r.Method, r.URL.Path, r.RemoteAddr)
-		ro.logger.Debugf("HandleProxy: dumping request: %+v", r)
+		ro.logger.Infof("%s: %s %s %s", name, r.Method, r.URL.Path, r.RemoteAddr)
+		ro.logger.Debugf("%s: request dump: %+v", name, r)
 		if isGolibRequest(r.URL.RawQuery) {
-			handleGolibRequest(w, r)
+			handleGoPackageRequest(w, r)
 			return
 		}
 
 		toURL, err := getParsedURL(from, r.URL)
 		if err != nil {
-			respondInternalServerError(w)
-			ro.logger.Errf("HandleProxy: Failed to parse target as url: [toURL=%s, err=%s]", r.URL, err)
+			writeError(w, ErrInternalServerError)
+			ro.logger.Errf("%s: Failed to parse url=%s err=%s", name, r.URL, err)
 			return
 		}
 
 		res, err := performRequest(w, r, toURL)
 		if err != nil {
-			respondInternalServerError(w)
-			ro.logger.Errf("client.Do(%#v): [err=%s]", r, err)
+			writeError(w, ErrInternalServerError)
+			ro.logger.Errf("%s: client.Do(%#v) err=%s", name, r, err)
 			return
 		}
 
 		if _, err := io.Copy(w, res.Body); err != nil {
-			respondInternalServerError(w)
-			ro.logger.Errf("Error proxying request: [err=%s]", err)
+			writeError(w, ErrInternalServerError)
+			ro.logger.Errf("%s: Error proxying request: %s", name, err)
 			return
 		}
 	}
@@ -45,7 +45,7 @@ func isGolibRequest(query string) bool {
 	return err == nil && ok
 }
 
-func handleGolibRequest(w http.ResponseWriter, r *http.Request) {
+func handleGoPackageRequest(w http.ResponseWriter, r *http.Request) {
 	module := filepath.Base(r.URL.Path)
 	w.Write([]byte(fmt.Sprintf("<meta name=\"go-import\" content=\"git.alazarte.com/%s git https://git.alazarte.com/cgit.cgi/%s/\">", module, module)))
 }

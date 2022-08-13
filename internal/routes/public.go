@@ -30,37 +30,67 @@ const (
 
 func (ro *routes) HandlePublicFiles(name, path string) {
 	ro.mux.handlers[name] = func(w http.ResponseWriter, r *http.Request) {
-		ro.logger.Infof("HandlePublicFiles: %s %s %s", r.Method, r.URL.Path, r.RemoteAddr)
-		ro.logger.Debugf("HandlePublicFiles: dumping request: %+v", r)
+		ro.logger.Infof("%s: %s %s %s", name, r.Method, r.URL.Path, r.RemoteAddr)
+		ro.logger.Debugf("%s: dumping request: %+v", name, r)
 		filename := fmt.Sprintf("%s%s", path, r.URL.Path)
-		contents, err := handleFile(filename)
-		if err != nil {
-			handleError(w, r, err)
+
+		if err := servePathContents(w, r, filename); err != nil {
+			ro.logger.Errf("%s: %s %s %s", name, r.Method, r.URL.Path, r.RemoteAddr)
+			writeError(w, err)
 			return
 		}
-		modtime, err := getFileModtime(filename)
-		if err != nil {
-			handleError(w, r, ErrInternalServerError)
-			return
-		}
-		http.ServeContent(w, r, filename, modtime, contents)
 	}
 }
 
-func getFileModtime(filename string) (time.Time, error) {
+func serveFileContents(w http.ResponseWriter, r *http.Request, filename string) error {
+	return serveContents(w, r, filename, fileContents)
+}
+
+func servePathContents(w http.ResponseWriter, r *http.Request, filename string) error {
+	return serveContents(w, r, filename, pathContents)
+}
+
+func serveContents(w http.ResponseWriter, r *http.Request, filename string, getContents func(string) (io.ReadSeeker, error)) error {
+	contents, err := getContents(filename)
+	if err != nil {
+		return err
+	}
+
+	modtime, err := getFileModtime(filename)
+	if err != nil {
+		return err
+	}
+
+	http.ServeContent(w, r, filename, modtime, contents)
+	return nil
+}
+
+func pathContents(filename string) (io.ReadSeeker, error) {
+	return openFilepathOrNotFound(filename, true)
+}
+
+func fileContents(filename string) (io.ReadSeeker, error) {
+	return openFilepathOrNotFound(filename, false)
+}
+
+func openFilepathOrNotFound(filename string, renderIfDir bool) (io.ReadSeeker, error) {
 	stat, err := os.Stat(filename)
 	if err != nil {
-		return time.Now(), err
+		if filename == "404.html" {
+			return nil, ErrFileNotFound
+		}
+		return openFilepathOrNotFound("404.html", false)
 	}
-	return stat.ModTime(), nil
-}
 
-func readFile(filename string) (io.ReadSeeker, error) {
-	f, err := os.Open(filename)
-	if err != nil {
-		return nil, ErrInternalServerError
+	if !stat.IsDir() {
+		return readFile(filename)
 	}
-	return f, nil
+
+	if renderIfDir {
+		return readDirContents(filename)
+	}
+
+	return nil, ErrBadRequest
 }
 
 func readDirContents(filepath string) (io.ReadSeeker, error) {
@@ -81,37 +111,10 @@ func readDirContents(filepath string) (io.ReadSeeker, error) {
 
 	buffer := bytes.NewBuffer(nil)
 	if err := t.Execute(buffer, sList); err != nil {
-		// ro.logger.Errf("t.Execute(w, sList=[%s]): [err=%s]", sList, err)
 		return nil, ErrInternalServerError
 	}
 
 	return bytes.NewReader(buffer.Bytes()), nil
-}
-
-func handleFile(filename string) (io.ReadSeeker, error) {
-	stat, err := os.Stat(filename)
-	if err != nil {
-		if filename == "/404.html" {
-			return nil, ErrFileNotFound
-		}
-		return handleFile("/404.html")
-	}
-
-	if !stat.IsDir() {
-		return readFile(filename)
-	}
-	return readDirContents(filename)
-}
-
-func handleError(w http.ResponseWriter, r *http.Request, err error) {
-	switch err {
-	case ErrFileNotFound:
-		w.WriteHeader(http.StatusNotFound)
-		w.Write([]byte(http.StatusText(http.StatusNotFound)))
-	case ErrInternalServerError:
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(http.StatusText(http.StatusInternalServerError)))
-	}
 }
 
 func listDirEntries(dirs []os.DirEntry) []string {
@@ -124,4 +127,20 @@ func listDirEntries(dirs []os.DirEntry) []string {
 		list = append(list, name)
 	}
 	return list
+}
+
+func getFileModtime(filename string) (time.Time, error) {
+	stat, err := os.Stat(filename)
+	if err != nil {
+		return time.Now(), err
+	}
+	return stat.ModTime(), nil
+}
+
+func readFile(filename string) (io.ReadSeeker, error) {
+	f, err := os.Open(filename)
+	if err != nil {
+		return nil, ErrInternalServerError
+	}
+	return f, nil
 }
