@@ -13,12 +13,21 @@ var (
 )
 
 func writeError(w http.ResponseWriter, err error) {
+	status := http.StatusOK
+	statusContent := []byte{}
+
 	switch err {
 	case ErrFileNotFound:
-		w.WriteHeader(http.StatusNotFound)
-		w.Write([]byte(http.StatusText(http.StatusNotFound)))
+		status = http.StatusNotFound
+		statusContent = []byte(http.StatusText(http.StatusNotFound))
 	case ErrInternalServerError:
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(http.StatusText(http.StatusInternalServerError)))
+		status = http.StatusInternalServerError
+		statusContent = []byte(http.StatusText(http.StatusInternalServerError))
+	case ErrBadRequest:
+		status = http.StatusBadRequest
+		statusContent = []byte(http.StatusText(http.StatusBadRequest))
 	}
+
+	w.WriteHeader(status)
+	w.Write(statusContent)
 }

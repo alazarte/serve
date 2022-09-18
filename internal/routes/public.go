@@ -3,11 +3,11 @@ package routes
 import (
 	"bytes"
 	"fmt"
-	"io"
+	"log"
 	"net/http"
 	"os"
+	"path"
 	"text/template"
-	"time"
 )
 
 const (
@@ -26,6 +26,9 @@ const (
 </table>
 </body>
 `
+
+	// TODO shouldn't specify /www path
+	NotFoundFilepath = "/www/404.html"
 )
 
 func (ro *routes) HandlePublicFiles(name, path string) {
@@ -34,11 +37,19 @@ func (ro *routes) HandlePublicFiles(name, path string) {
 		ro.logger.Debugf("%s: dumping request: %+v", name, r)
 		filename := fmt.Sprintf("%s%s", path, r.URL.Path)
 
+		setMimeForServedFile(w, filename)
 		if err := servePathContents(w, r, filename); err != nil {
 			ro.logger.Errf("%s: %s %s %s", name, r.Method, r.URL.Path, r.RemoteAddr)
 			writeError(w, err)
 			return
 		}
+	}
+}
+
+func setMimeForServedFile(w http.ResponseWriter, filename string) {
+	switch path.Ext(filename) {
+	case ".css":
+		w.Header().Set("content-type", "text/css; charset=utf-8")
 	}
 }
 
@@ -50,36 +61,32 @@ func servePathContents(w http.ResponseWriter, r *http.Request, filename string) 
 	return serveContents(w, r, filename, pathContents)
 }
 
-func serveContents(w http.ResponseWriter, r *http.Request, filename string, getContents func(string) (io.ReadSeeker, error)) error {
+func serveContents(w http.ResponseWriter, r *http.Request, filename string, getContents func(string) ([]byte, error)) error {
 	contents, err := getContents(filename)
 	if err != nil {
 		return err
 	}
 
-	modtime, err := getFileModtime(filename)
-	if err != nil {
-		return err
-	}
-
-	http.ServeContent(w, r, filename, modtime, contents)
-	return nil
+	_, err = w.Write(contents)
+	return err
 }
 
-func pathContents(filename string) (io.ReadSeeker, error) {
+func pathContents(filename string) ([]byte, error) {
 	return openFilepathOrNotFound(filename, true)
 }
 
-func fileContents(filename string) (io.ReadSeeker, error) {
+func fileContents(filename string) ([]byte, error) {
 	return openFilepathOrNotFound(filename, false)
 }
 
-func openFilepathOrNotFound(filename string, renderIfDir bool) (io.ReadSeeker, error) {
+func openFilepathOrNotFound(filename string, renderIfDir bool) ([]byte, error) {
 	stat, err := os.Stat(filename)
 	if err != nil {
-		if filename == "404.html" {
-			return nil, ErrFileNotFound
+		log.Println("File not found:", filename, renderIfDir, err)
+		if filename == NotFoundFilepath {
+			return []byte(http.StatusText(http.StatusNotFound)), ErrFileNotFound
 		}
-		return openFilepathOrNotFound("404.html", false)
+		return openFilepathOrNotFound(NotFoundFilepath, false)
 	}
 
 	if !stat.IsDir() {
@@ -93,18 +100,17 @@ func openFilepathOrNotFound(filename string, renderIfDir bool) (io.ReadSeeker, e
 	return nil, ErrBadRequest
 }
 
-func readDirContents(filepath string) (io.ReadSeeker, error) {
-	list, err := os.ReadDir(filepath)
-	if err != nil {
-		return nil, ErrInternalServerError
-	}
-
+func readDirContents(filepath string) ([]byte, error) {
 	t, err := template.New("dir").Parse(DIR_TEMPLATE)
 	if err != nil {
 		return nil, ErrInternalServerError
 	}
 
-	sList := listDirEntries(list)
+	sList, err := listDirEntries(filepath)
+	if err != nil {
+		return nil, ErrInternalServerError
+	}
+
 	if filepath != "/" {
 		sList = append([]string{"../"}, sList...)
 	}
@@ -114,33 +120,32 @@ func readDirContents(filepath string) (io.ReadSeeker, error) {
 		return nil, ErrInternalServerError
 	}
 
-	return bytes.NewReader(buffer.Bytes()), nil
+	return buffer.Bytes(), nil
 }
 
-func listDirEntries(dirs []os.DirEntry) []string {
-	list := []string{}
-	for _, d := range dirs {
+func listDirEntries(filepath string) ([]string, error) {
+	list, err := os.ReadDir(filepath)
+	if err != nil {
+		return []string{}, err
+	}
+
+	files := []string{}
+	for _, d := range list {
 		name := d.Name()
 		if d.IsDir() {
 			name = name + "/"
 		}
-		list = append(list, name)
+
+		files = append(files, fmt.Sprintf("%s", name))
 	}
-	return list
+	return files, nil
 }
 
-func getFileModtime(filename string) (time.Time, error) {
-	stat, err := os.Stat(filename)
-	if err != nil {
-		return time.Now(), err
-	}
-	return stat.ModTime(), nil
-}
-
-func readFile(filename string) (io.ReadSeeker, error) {
-	f, err := os.Open(filename)
+func readFile(filename string) ([]byte, error) {
+	file, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, ErrInternalServerError
 	}
-	return f, nil
+
+	return file, nil
 }
