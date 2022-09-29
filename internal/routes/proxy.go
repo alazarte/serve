@@ -32,6 +32,8 @@ func (ro *routes) HandleProxy(name, from string) {
 			return
 		}
 
+		w.WriteHeader(res.StatusCode)
+
 		if _, err := io.Copy(w, res.Body); err != nil {
 			writeError(w, ErrInternalServerError)
 			ro.logger.Errf("%s: Error proxying request: %s", name, err)
