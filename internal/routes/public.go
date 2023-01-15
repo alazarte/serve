@@ -3,7 +3,6 @@ package routes
 import (
 	"bytes"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"path"
@@ -16,7 +15,6 @@ const (
 </head>
 <body>
 <h1>alazarte</h1>
-[<a href="https://alazarte.com">home</a>] <hr/>
 <table>
 {{range .}}
 <tr>
@@ -26,9 +24,6 @@ const (
 </table>
 </body>
 `
-
-	// TODO shouldn't specify /www path
-	NotFoundFilepath = "/www/404.html"
 )
 
 func (ro *routes) HandlePublicFiles(name, path string) {
@@ -82,11 +77,7 @@ func fileContents(filename string) ([]byte, error) {
 func openFilepathOrNotFound(filename string, renderIfDir bool) ([]byte, error) {
 	stat, err := os.Stat(filename)
 	if err != nil {
-		log.Println("File not found:", filename, renderIfDir, err)
-		if filename == NotFoundFilepath {
-			return []byte(http.StatusText(http.StatusNotFound)), ErrFileNotFound
-		}
-		return openFilepathOrNotFound(NotFoundFilepath, false)
+		return nil, ErrFileNotFound
 	}
 
 	if !stat.IsDir() {
@@ -94,13 +85,13 @@ func openFilepathOrNotFound(filename string, renderIfDir bool) ([]byte, error) {
 	}
 
 	if renderIfDir {
-		return readDirContents(filename)
+		return renderDirContents(filename)
 	}
 
 	return nil, ErrBadRequest
 }
 
-func readDirContents(filepath string) ([]byte, error) {
+func renderDirContents(filepath string) ([]byte, error) {
 	t, err := template.New("dir").Parse(DIR_TEMPLATE)
 	if err != nil {
 		return nil, ErrInternalServerError
@@ -111,9 +102,7 @@ func readDirContents(filepath string) ([]byte, error) {
 		return nil, ErrInternalServerError
 	}
 
-	if filepath != "/" {
-		sList = append([]string{"../"}, sList...)
-	}
+	sList = append([]string{"../"}, sList...)
 
 	buffer := bytes.NewBuffer(nil)
 	if err := t.Execute(buffer, sList); err != nil {

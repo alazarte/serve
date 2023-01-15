@@ -32,6 +32,11 @@ func (ro *routes) HandleProxy(name, from string) {
 			return
 		}
 
+		for header, values := range res.Header {
+			for _, v := range values {
+				w.Header().Add(header, v)
+			}
+		}
 		w.WriteHeader(res.StatusCode)
 
 		if _, err := io.Copy(w, res.Body); err != nil {
@@ -67,7 +72,6 @@ func performRequest(w http.ResponseWriter, r *http.Request, toURL *url.URL) (*ht
 	r.RequestURI = ""
 	r.Host = "alazarte.com"
 
-	w.Header().Set("Access-Control-Allow-Origin", "https://alazarte.com")
 	w.Header().Set("content-type", r.Header.Get("content-type"))
 
 	client := http.Client{}

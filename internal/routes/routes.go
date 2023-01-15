@@ -58,6 +58,25 @@ func redirect(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, fmt.Sprintf("https://%s%s", r.Host, r.URL.Path), http.StatusTemporaryRedirect)
 }
 
+func (ro *routes) ConfigHandlers(handlers []Handler) {
+	for _, h := range handlers {
+		switch h.Type {
+		case TypeRoot:
+			extraHeaders := make(map[string]string)
+			for _, h := range h.Headers {
+				extraHeaders[http.CanonicalHeaderKey(h.Name)] = h.Value
+			}
+			ro.HandleRoot(h.Name, h.Path, extraHeaders)
+		case TypePublic:
+			ro.HandlePublicFiles(h.Name, h.Path)
+		case TypeProxy:
+			ro.HandleProxy(h.Name, h.Path)
+		default:
+			fmt.Printf("Main: Handler type not recognized: [type=%s]", h.Type)
+		}
+	}
+}
+
 func (ro *routes) ListenTLS(pem, sk string) chan error {
 	cerr := make(chan error)
 

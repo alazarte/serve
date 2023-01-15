@@ -1,3 +1,24 @@
+/*
+Some function that I rescued from main.go, not sure why but could be useful
+
+func getLogOutput() io.Writer {
+	var debugOut io.Writer = io.Discard
+
+	switch config.Debug {
+	case "":
+		debugOut = io.Discard
+	default:
+		f, err := os.OpenFile(config.Debug, os.O_WRONLY|os.O_APPEND, 0644)
+		if err != nil {
+			panic(fmt.Sprintln("couldn't open file for debug logs:", config.Debug))
+		}
+		debugOut = f
+	}
+
+	return debugOut
+}
+*/
+
 package logger
 
 import (
