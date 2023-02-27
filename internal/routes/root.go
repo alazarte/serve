@@ -46,6 +46,8 @@ func serveRootContents(filepath string, extraHeaders map[string]string, w http.R
 		fallthrough
 	case ".ico":
 		fallthrough
+	case ".js":
+		fallthrough
 	case ".html":
 		// TODO remove path.Join, it will produce a panic
 		for k, v := range extraHeaders {
