@@ -1,3 +1,3 @@
-module serve2
+module serve
 
 go 1.21
