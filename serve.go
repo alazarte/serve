@@ -27,11 +27,18 @@ func handleServeFiles(w http.ResponseWriter, r *http.Request) {
 	pathInfo, err := os.Stat(localFilepath)
 	if err != nil {
 		log.Println("Failed Stat() file:", localFilepath)
-		writeStatusPage(http.StatusBadRequest, w)
+		writeStatusPage(http.StatusNotFound, w)
 		return
 	}
 
 	if pathInfo.IsDir() {
+		// If the path is a folder, and doesn't ends in /, the browser won't load resources located
+		// in that path, like a script.js, it will try to load that script from the root folder
+		if localFilepath[len(localFilepath)-1] != '/' {
+			// TODO get the redirect URL some other way
+			http.Redirect(w, r, "http://"+r.Host+r.RequestURI+"/", http.StatusSeeOther)
+			return
+		}
 		localFilepath = fp.Join(localFilepath, "index.html")
 		log.Println("path ends in /, should be index")
 	}

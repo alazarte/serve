@@ -28,6 +28,6 @@ func redirect(url string, w http.ResponseWriter, r *http.Request) error {
 }
 
 func main() {
-	http.HandleFunc("/", handleServeFiles)
-	log.Fatal(http.ListenAndServe(defaultPort, nil))
+	log.Println("Default port:", defaultPort)
+	log.Fatal(http.ListenAndServe(defaultPort, handler{}))
 }
