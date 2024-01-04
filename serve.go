@@ -1,69 +1,71 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"net/http"
 	"os"
-	fp "path/filepath"
+	"fmt"
+	"strings"
 )
 
-func writeStatusPage(status int, w http.ResponseWriter) {
-	w.WriteHeader(status)
-	// TODO implement a template for errors
-	body := fmt.Sprintf("<h1>%s</h1>", http.StatusText(status))
-	w.Write([]byte(body))
+type handler struct {
+	renderIndex bool
 }
 
-func handleServeFiles(w http.ResponseWriter, r *http.Request) {
-	localFilepath := fmt.Sprintf("%s%s", filepathPrefix, r.URL.Path)
+func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	filepath := r.URL.Path
 
-	if !fp.IsLocal(localFilepath) {
-		log.Println("Filepath not local:", localFilepath)
-		writeStatusPage(http.StatusBadRequest, w)
+	subdomain := ""
+	pieces := strings.Split(r.Host, ".")
+	fmt.Println(pieces)
+	if len(pieces) > 1 {
+		subdomain = pieces[0]
+	}
+
+	renderRoot := false
+
+	if filepath[len(filepath)-1] == '/' {
+		renderRoot = true
+		log.Println("This is index")
+	}
+	log.Println(filepath)
+
+	if subdomain == "public" && renderRoot {
+		renderIndexPage("public", w, r)
 		return
 	}
 
-	pathInfo, err := os.Stat(localFilepath)
-	if err != nil {
-		log.Println("Failed Stat() file:", localFilepath)
-		writeStatusPage(http.StatusNotFound, w)
+	if renderRoot {
+		filepath += "index.html"
+	}
+
+	handleServe(filepath, w, r)
+}
+
+func handleServe(filepath string, w http.ResponseWriter, r *http.Request) {
+	// avoid leading slash
+	filepath = filepath[1:]
+
+	handleFile(filepath, w, r)
+}
+
+func handleFile(filepath string, w http.ResponseWriter, r *http.Request) {
+	info, err := os.Stat(filepath)
+
+	if err != nil || os.IsNotExist(err) {
+		log.Printf("Couldn't stat=%s err=%s", filepath, err)
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte(http.StatusText(http.StatusNotFound)))
 		return
 	}
 
-	if pathInfo.IsDir() {
-		// If the path is a folder, and doesn't ends in /, the browser won't load resources located
-		// in that path, like a script.js, it will try to load that script from the root folder
-		if localFilepath[len(localFilepath)-1] != '/' {
-			// TODO get the redirect URL some other way
-			http.Redirect(w, r, "http://"+r.Host+r.RequestURI+"/", http.StatusSeeOther)
-			return
-		}
-		localFilepath = fp.Join(localFilepath, "index.html")
-		log.Println("path ends in /, should be index")
-	}
-	log.Println(localFilepath)
-
-	if err := writeFileAndStatus(localFilepath, 200, w); err != nil {
-		log.Println("Failed writeFile()", err)
-		writeStatusPage(statusPerError(err), w)
-	}
-}
-
-func writeFileAndStatus(filepath string, status int, w http.ResponseWriter) error {
-	f, err := os.ReadFile(filepath)
+	file, err := os.Open(filepath)
 	if err != nil {
-		return err
+		log.Println(err)
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(http.StatusText(http.StatusInternalServerError)))
+		return
 	}
 
-	mime := guessMimeFromFilename(filepath)
-	if mime == "" {
-		mime = http.DetectContentType(f)
-		log.Println("DetectContentType():", mime)
-	}
-
-	w.Header().Add("Content-type", mime)
-	w.WriteHeader(status)
-	w.Write(f)
-	return nil
+	http.ServeContent(w, r, info.Name(), info.ModTime(), file)
 }
