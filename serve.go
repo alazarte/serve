@@ -1,10 +1,10 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"os"
-	"fmt"
 	"strings"
 )
 
@@ -14,6 +14,7 @@ type handler struct {
 
 func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	filepath := r.URL.Path
+	log.Println("From:", r.RemoteAddr, "URI:", r.RequestURI)
 
 	subdomain := ""
 	pieces := strings.Split(r.Host, ".")
@@ -26,11 +27,11 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if filepath[len(filepath)-1] == '/' {
 		renderRoot = true
-		log.Println("This is index")
 	}
-	log.Println(filepath)
+	log.Println("renderRoot:", renderRoot, "Subdomain:", subdomain)
 
 	if subdomain == "public" && renderRoot {
+		log.Println("Handling public files:", filepath)
 		renderIndexPage("public", w, r)
 		return
 	}
@@ -45,6 +46,7 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func handleServe(filepath string, w http.ResponseWriter, r *http.Request) {
 	// avoid leading slash
 	filepath = filepath[1:]
+	log.Println("Without leading slash:", filepath)
 
 	handleFile(filepath, w, r)
 }

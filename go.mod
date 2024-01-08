@@ -1,3 +1,3 @@
-module simpler_serve
+module serve
 
 go 1.21.5

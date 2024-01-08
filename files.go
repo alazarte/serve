@@ -2,11 +2,11 @@ package main
 
 import (
 	"bytes"
-	"net/http"
-	"text/template"
 	"fmt"
-	"os"
 	"log"
+	"net/http"
+	"os"
+	"text/template"
 )
 
 const (
@@ -95,4 +95,3 @@ func getUpFolderPath(filepath string) string {
 	}
 	return filepath[:i+1]
 }
-
