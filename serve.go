@@ -19,7 +19,7 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	subdomain := ""
 	pieces := strings.Split(r.Host, ".")
 	fmt.Println(pieces)
-	if len(pieces) > 1 {
+	if len(pieces) > 2 {
 		subdomain = pieces[0]
 	}
 
@@ -30,10 +30,13 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Println("renderRoot:", renderRoot, "Subdomain:", subdomain)
 
-	if subdomain == "public" && renderRoot {
-		log.Println("Handling public files:", filepath)
-		renderIndexPage("public", w, r)
+	if subdomain == "public" {
+		handlePublicFiles(renderRoot, filepath, w, r)
 		return
+	}
+
+	if subdomain == "cal" && renderRoot {
+		log.Println("TBD Handling calendar")
 	}
 
 	if renderRoot {
@@ -44,14 +47,14 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleServe(filepath string, w http.ResponseWriter, r *http.Request) {
-	// avoid leading slash
-	filepath = filepath[1:]
-	log.Println("Without leading slash:", filepath)
-
-	handleFile(filepath, w, r)
+	handleFile("www/", filepath, w, r)
 }
 
-func handleFile(filepath string, w http.ResponseWriter, r *http.Request) {
+func handleFile(pathPrefix string, filepath string, w http.ResponseWriter, r *http.Request) {
+	// avoid leading slash
+	filepath = filepath[1:]
+	filepath = fmt.Sprintf("%s%s", pathPrefix, filepath)
+
 	info, err := os.Stat(filepath)
 
 	if err != nil || os.IsNotExist(err) {

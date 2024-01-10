@@ -7,6 +7,11 @@ import (
 	"net/http"
 )
 
+const (
+	httpPort = ":80"
+	httpsPort = ":443"
+)
+
 var (
 	certFile string
 	keyFile  string
@@ -27,17 +32,19 @@ func main() {
 	h := handler{
 		renderIndex: false,
 	}
-	log.Println(certFile, keyFile)
+
 	if certFile != "" && keyFile != "" {
-		log.Println("Listening https")
+		log.Printf("cert=%s key=%s port=%s", certFile, keyFile, httpsPort)
+
 		go func() {
-			if err := http.ListenAndServe(":80", http.HandlerFunc(redirectToTls)); err != nil {
+			if err := http.ListenAndServe(httpPort, http.HandlerFunc(redirectToTls)); err != nil {
 				log.Fatalf("ListenAndServe error: %v", err)
 			}
 		}()
 
-		log.Fatal(http.ListenAndServeTLS(":443", certFile, keyFile, h))
+		log.Fatal(http.ListenAndServeTLS(httpsPort, certFile, keyFile, h))
 	} else {
-		log.Fatal(http.ListenAndServe(":80", h))
+		log.Println("port=%s", httpPort)
+		log.Fatal(http.ListenAndServe(httpPort, h))
 	}
 }
