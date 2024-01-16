@@ -31,12 +31,12 @@ type linkEntry struct {
 	Text string
 }
 
-func handlePublicFiles(renderRoot bool, filepath string, w http.ResponseWriter, r *http.Request) {
+func handlePublicFiles(publicFilesRoot string, renderRoot bool, filepath string, w http.ResponseWriter, r *http.Request) {
 	if renderRoot {
-		renderIndexPage("public/", filepath, w, r)
+		renderIndexPage(publicFilesRoot, filepath, w, r)
 		return
 	}
-	handleFile("public/", filepath, w, r)
+	handleFile(publicFilesRoot, filepath, w, r)
 }
 
 func renderIndexPage(pathPrefix string, filepath string, w http.ResponseWriter, r *http.Request) {

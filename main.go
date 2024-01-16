@@ -3,8 +3,10 @@ package main
 import (
 	"log"
 	"fmt"
+	"os"
 	"flag"
 	"net/http"
+	"encoding/json"
 )
 
 const (
@@ -13,13 +15,11 @@ const (
 )
 
 var (
-	certFile string
-	keyFile  string
+	configFilepath string
 )
 
 func init() {
-	flag.StringVar(&certFile, "cert", "", "Certificate filepath")
-	flag.StringVar(&keyFile, "key", "", "Key filepath")
+	flag.StringVar(&configFilepath, "config", "config.json", "Config filepath")
 	flag.Parse()
 }
 
@@ -29,12 +29,29 @@ func redirectToTls(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	h := handler{
-		renderIndex: false,
+	contents, err := os.ReadFile(configFilepath)
+	if err != nil {
+		panic(err)
 	}
 
-	if certFile != "" && keyFile != "" {
-		log.Printf("cert=%s key=%s port=%s", certFile, keyFile, httpsPort)
+	config := struct{
+		HtmlRoot string `json:"htmlFilesRoot"`
+		PublicRoot string `json:"publicFilesRoot"`
+		KeyFile string `json:"key"`
+		CertFile string `json:"cert"`
+	}{}
+	if err := json.Unmarshal(contents, &config); err != nil {
+		panic(err)
+	}
+
+	h := handler{
+		renderIndex: false,
+		htmlFilesRoot: config.HtmlRoot,
+		publicFilesRoot: config.PublicRoot,
+	}
+
+	if config.CertFile != "" && config.KeyFile != "" {
+		log.Printf("cert=%s key=%s port=%s", config.CertFile, config.KeyFile, httpsPort)
 
 		go func() {
 			if err := http.ListenAndServe(httpPort, http.HandlerFunc(redirectToTls)); err != nil {
@@ -42,9 +59,9 @@ func main() {
 			}
 		}()
 
-		log.Fatal(http.ListenAndServeTLS(httpsPort, certFile, keyFile, h))
+		log.Fatal(http.ListenAndServeTLS(httpsPort, config.CertFile, config.KeyFile, h))
 	} else {
-		log.Println("port=%s", httpPort)
+		log.Printf("port=%s", httpPort)
 		log.Fatal(http.ListenAndServe(httpPort, h))
 	}
 }

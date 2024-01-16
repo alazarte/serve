@@ -5,49 +5,47 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strings"
 )
 
 type handler struct {
 	renderIndex bool
+	htmlFilesRoot string
+	publicFilesRoot string
 }
 
 func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	filepath := r.URL.Path
 	log.Println("From:", r.RemoteAddr, "URI:", r.RequestURI)
 
-	subdomain := ""
-	pieces := strings.Split(r.Host, ".")
-	fmt.Println(pieces)
-	if len(pieces) > 2 {
-		subdomain = pieces[0]
-	}
-
 	renderRoot := false
 
 	if filepath[len(filepath)-1] == '/' {
 		renderRoot = true
 	}
-	log.Println("renderRoot:", renderRoot, "Subdomain:", subdomain)
 
-	if subdomain == "public" {
-		handlePublicFiles(renderRoot, filepath, w, r)
+	// TODO don't hardcode hostnames, replace with array of hosts in config and
+	// choose handler from it
+	switch r.Host {
+	case "public.alazarte.com":
+		handlePublicFiles(h.publicFilesRoot, renderRoot, filepath, w, r)
+		return
+	case "cal.alazarte.com":
+		log.Println("TBD Handling calendar")
+		return
+	case "localhost:8080":
+		fallthrough
+	case "alazarte.com":
+		if renderRoot {
+			filepath += "index.html"
+		}
+		handleFile(h.htmlFilesRoot, filepath, w, r)
+		return
+	default:
+		log.Println("Can't handle that host:", r.Host)
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(http.StatusText(http.StatusBadRequest)))
 		return
 	}
-
-	if subdomain == "cal" && renderRoot {
-		log.Println("TBD Handling calendar")
-	}
-
-	if renderRoot {
-		filepath += "index.html"
-	}
-
-	handleServe(filepath, w, r)
-}
-
-func handleServe(filepath string, w http.ResponseWriter, r *http.Request) {
-	handleFile("www/", filepath, w, r)
 }
 
 func handleFile(pathPrefix string, filepath string, w http.ResponseWriter, r *http.Request) {

@@ -1,0 +1,6 @@
+{
+  "publicFilesRoot": "/var/public/",
+  "htmlFilesRoot": "/var/html/",
+  "cert": "/path/to/cert.pem or leave empty",
+  "key": "/path/to/key.pem or leave empty"
+}
