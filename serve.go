@@ -7,13 +7,23 @@ import (
 	"os"
 )
 
-type handler struct {
-	renderIndex bool
-	htmlFilesRoot string
-	publicFilesRoot string
+type HandlerConfig struct {
+	HtmlRoot string `json:"htmlFilesRoot"`
+	PublicRoot string `json:"publicFilesRoot"`
+	KeyFile string `json:"key"`
+	CertFile string `json:"cert"`
+	Hosts map[string]struct{
+		Root string `json:"root"`
+		HandlerType string `json:"handlerType"`
+	} `json:"hosts"`
 }
 
-func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+const (
+	PublicHandler = "public"
+	HTMLHandler = "html"
+)
+
+func (h HandlerConfig) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	filepath := r.URL.Path
 	log.Println("From:", r.RemoteAddr, "URI:", r.RequestURI)
 
@@ -23,28 +33,19 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		renderRoot = true
 	}
 
-	// TODO don't hardcode hostnames, replace with array of hosts in config and
-	// choose handler from it
-	switch r.Host {
-	case "public.alazarte.com":
-		handlePublicFiles(h.publicFilesRoot, renderRoot, filepath, w, r)
-		return
-	case "cal.alazarte.com":
-		log.Println("TBD Handling calendar")
-		return
-	case "localhost:8080":
-		fallthrough
-	case "alazarte.com":
+	host := h.Hosts[r.Host]
+	switch host.HandlerType {
+	case PublicHandler:
+		handlePublicFiles(host.Root, renderRoot, filepath, w, r)
+	case HTMLHandler:
 		if renderRoot {
 			filepath += "index.html"
 		}
-		handleFile(h.htmlFilesRoot, filepath, w, r)
-		return
+		handleFile(host.Root, filepath, w, r)
 	default:
 		log.Println("Can't handle that host:", r.Host)
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte(http.StatusText(http.StatusBadRequest)))
-		return
 	}
 }
 

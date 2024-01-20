@@ -34,24 +34,13 @@ func main() {
 		panic(err)
 	}
 
-	config := struct{
-		HtmlRoot string `json:"htmlFilesRoot"`
-		PublicRoot string `json:"publicFilesRoot"`
-		KeyFile string `json:"key"`
-		CertFile string `json:"cert"`
-	}{}
-	if err := json.Unmarshal(contents, &config); err != nil {
+	handler := HandlerConfig{}
+	if err := json.Unmarshal(contents, &handler); err != nil {
 		panic(err)
 	}
 
-	h := handler{
-		renderIndex: false,
-		htmlFilesRoot: config.HtmlRoot,
-		publicFilesRoot: config.PublicRoot,
-	}
-
-	if config.CertFile != "" && config.KeyFile != "" {
-		log.Printf("cert=%s key=%s port=%s", config.CertFile, config.KeyFile, httpsPort)
+	if handler.CertFile != "" && handler.KeyFile != "" {
+		log.Printf("cert=%s key=%s port=%s", handler.CertFile, handler.KeyFile, httpsPort)
 
 		go func() {
 			if err := http.ListenAndServe(httpPort, http.HandlerFunc(redirectToTls)); err != nil {
@@ -59,9 +48,9 @@ func main() {
 			}
 		}()
 
-		log.Fatal(http.ListenAndServeTLS(httpsPort, config.CertFile, config.KeyFile, h))
+		log.Fatal(http.ListenAndServeTLS(httpsPort, handler.CertFile, handler.KeyFile, handler))
 	} else {
 		log.Printf("port=%s", httpPort)
-		log.Fatal(http.ListenAndServe(httpPort, h))
+		log.Fatal(http.ListenAndServe(httpPort, handler))
 	}
 }
