@@ -1,0 +1,18 @@
+{
+  "cert": "/etc/cert.pem",
+  "key": "/etc/privkey.pem",
+  "hosts": {
+    "alazarte.com": {
+      "root": "/var/web/html/",
+      "handlerType": "html"
+    },
+    "public.alazarte.com": {
+      "root": "/var/web/public/",
+      "handlerType": "public"
+    },
+    "git.alazarte.com": {
+      "url": "http://cgit",
+      "handlerType": "redirect"
+    }
+  }
+}

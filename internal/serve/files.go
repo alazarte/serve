@@ -1,4 +1,4 @@
-package main
+package serve
 
 import (
 	"bytes"
@@ -70,8 +70,6 @@ func renderDirContents(pathPrefix string, filepath string) ([]byte, error) {
 	if err := t.Execute(buffer, sList); err != nil {
 		return nil, err
 	}
-
-	log.Println(buffer.String())
 
 	return buffer.Bytes(), nil
 }
